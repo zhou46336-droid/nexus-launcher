@@ -1,0 +1,17 @@
+{
+  "name": "nexus-launcher-workspace",
+  "private": true,
+  "description": "更多应用（NexusLauncher）的开发脚本：运行、测试、生成截图",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron app --dev",
+    "test": "node test/main-smoke.js && node test/ui-test.js",
+    "test:main": "node test/main-smoke.js",
+    "test:ui": "node test/ui-test.js",
+    "docs:images": "node test/ui-test.js --docs"
+  },
+  "devDependencies": {
+    "electron": "38.2.0",
+    "playwright": "^1.48.0"
+  }
+}

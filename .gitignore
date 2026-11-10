@@ -1,0 +1,15 @@
+# 构建产物（Electron 运行时有 200 多 MB，不放进仓库）
+build/
+dist/
+installer/cmd/setup/payload.zip
+installer/cmd/*/rsrc_windows_amd64.syso
+
+# 测试输出
+test/out/
+
+# Node
+node_modules/
+
+*.log
+.DS_Store
+Thumbs.db
