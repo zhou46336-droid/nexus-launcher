@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+<title>更多应用</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="backdrop"></div>
+<div id="toast-layer"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <!-- 液态玻璃（参考 kube.io 的物理折射 + liquid-glass-react 的色散做法）：
+       位移贴图按「凸面玻璃 + 斯涅尔定律」算出边缘每一点的折射偏移；
+       红/绿/蓝三个通道用略微不同的偏移量，边缘会有一点点自然色散。不画任何描边。 -->
+  <filter id="lg" x="0" y="0" width="100%" height="100%" filterUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+    <feImage id="lg-map" x="0" y="0" width="1" height="1" preserveAspectRatio="none" result="map"></feImage>
+    <feDisplacementMap id="lg-r" in="SourceGraphic" in2="map" scale="40" xChannelSelector="R" yChannelSelector="G" result="dr"></feDisplacementMap>
+    <feColorMatrix in="dr" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="cr"></feColorMatrix>
+    <feDisplacementMap id="lg-g" in="SourceGraphic" in2="map" scale="38" xChannelSelector="R" yChannelSelector="G" result="dg"></feDisplacementMap>
+    <feColorMatrix in="dg" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="cg"></feColorMatrix>
+    <feDisplacementMap id="lg-b" in="SourceGraphic" in2="map" scale="36" xChannelSelector="R" yChannelSelector="G" result="db"></feDisplacementMap>
+    <feColorMatrix in="db" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="cb"></feColorMatrix>
+    <feComposite in="cr" in2="cg" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="rg"></feComposite>
+    <feComposite in="rg" in2="cb" operator="arithmetic" k1="0" k2="1" k3="1" k4="0"></feComposite>
+  </filter>
+</svg>
+<section id="panel" role="dialog" aria-label="更多应用" tabindex="-1">
+  <div id="panel-bg" aria-hidden="true"></div>
+  <div id="panel-tint" aria-hidden="true"></div>
+  <div id="content"></div>
+</section>
+<script src="js/core.js"></script>
+<script src="js/glass.js"></script>
+<script src="js/view-main.js"></script>
+<script src="js/view-settings.js"></script>
+<script src="js/view-add.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
