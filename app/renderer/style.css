@@ -606,3 +606,28 @@ input[type="search"]::-webkit-search-cancel-button { filter: invert(1); opacity:
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.22); border-radius: var(--pill); }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- 悬停高光 ----------
+   鼠标移到按钮、图标、菜单项上时，指针位置有一团柔和的光，跟着鼠标移动（不画描边）。
+   --mx / --my 由 js/app.js 根据指针位置实时更新。 */
+.btn, .icon-btn, .seg-btn, .mi, .tbtn, .tclose, .tile, .row { position: relative; isolation: isolate; }
+.btn::before, .icon-btn::before, .seg-btn::before, .mi::before, .tbtn::before, .tclose::before, .tile::before, .row::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  corner-shape: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  background: radial-gradient(circle var(--glow-r, 56px) at var(--mx, 50%) var(--my, 50%), var(--glow, rgba(255, 255, 255, 0.26)), transparent 72%);
+}
+.btn:hover::before, .icon-btn:hover::before, .seg-btn:hover::before, .mi:hover:not(:disabled)::before,
+.tbtn:hover::before, .tclose:hover::before, .tile:hover::before, .row:hover::before { opacity: 1; }
+.btn:active::before, .icon-btn:active::before { --glow: rgba(255, 255, 255, 0.4); }
+.btn.primary { --glow: rgba(255, 255, 255, 0.45); }
+.tile, .row, .mi { --glow: rgba(255, 255, 255, 0.2); --glow-r: 70px; }
+.strip .tile { --glow-r: 48px; }
+.mi.danger { --glow: rgba(255, 120, 120, 0.22); }
+.icon-btn { --glow-r: 28px; }

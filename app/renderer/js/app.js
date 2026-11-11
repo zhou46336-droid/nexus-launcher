@@ -95,6 +95,22 @@
   });
   document.addEventListener('dragend', () => { S.dragKey = null; });
 
+  // 悬停高光：把指针在按钮里的位置交给 CSS（每帧最多更新一次）
+  const GLOW = '.btn, .icon-btn, .seg-btn, .mi, .tbtn, .tclose, .tile, .row';
+  let glowEvent = null;
+  document.addEventListener('pointermove', (e) => {
+    if (!glowEvent) requestAnimationFrame(() => {
+      const ev = glowEvent;
+      glowEvent = null;
+      const el = ev.target && ev.target.closest ? ev.target.closest(GLOW) : null;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      el.style.setProperty('--mx', Math.round(ev.clientX - r.left) + 'px');
+      el.style.setProperty('--my', Math.round(ev.clientY - r.top) + 'px');
+    });
+    glowEvent = e;
+  }, { passive: true });
+
   /* ---------- 与主进程同步 ---------- */
 
   api.onMoved((rect) => { S.panelRect = rect; NL.positionBg(); });
