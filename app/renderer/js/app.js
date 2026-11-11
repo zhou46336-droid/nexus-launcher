@@ -99,27 +99,71 @@
 
   api.onMoved((rect) => { S.panelRect = rect; NL.positionBg(); });
 
-  api.onOpen((data, bg, rect) => {
-    S.bg = bg || null;
+  // 显示面板（播放弹出动画）
+  function reveal() {
+    clearTimeout(S.waitTimer);
+    if (S.revealed) return;
+    S.revealed = true;
+    void panel.offsetWidth; // 先让底色在透明状态下变好，显示时不要再播一次渐变
+    panel.classList.remove('waiting');
+    panel.classList.remove('pop');
+    void panel.offsetWidth;
+    panel.classList.add('pop');
+    panel.focus({ preventScroll: true });
+  }
+
+  // 打开面板：先渲染好内容但保持透明，等背景截图到了（或等待超时）再显示
+  api.onOpen((data, rect, opts) => {
+    opts = opts || {};
+    S.bg = null;
     S.panelRect = rect || null;
+    S.lateBgOk = opts.lateBgOk !== false;
+    S.catalogIcons = null;
     if (data) S.data = data;
-    try { NL.positionBg(); } catch (e) { uiLog('positionBg: ' + (e && e.message)); }
     S.view = 'main';
     S.edit = false;
     S.page = 0;
     S.addSel.clear();
     S.addQuery = '';
     NL.closeMenu();
+    S.revealed = false;
+    panel.classList.add('waiting');
     NL.render();
-    panel.classList.remove('pop');
-    void panel.offsetWidth;
-    panel.classList.add('pop');
-    panel.focus({ preventScroll: true });
+    clearTimeout(S.waitTimer);
+    S.waitTimer = setTimeout(reveal, Number(opts.maxWait) || 300);
     if (data && Array.isArray(data.notice) && data.notice.length) {
       const names = data.notice.slice(0, 3).join('、') + (data.notice.length > 3 ? ' 等 ' + data.notice.length + ' 个' : '');
       NL.showToast({ text: '已自动添加新安装的应用：' + names, ms: 5000 });
     }
   });
+
+  // 背景截图到了
+  api.onBg((bg, rect) => {
+    if (S.revealed && !S.lateBgOk) return; // 老系统上晚到的截图可能拍进了面板自己，不用
+    const late = S.revealed;
+    S.bg = bg || null;
+    if (rect) S.panelRect = rect;
+    try { NL.applyLook(); } catch (e) { uiLog('bg: ' + (e && e.message)); }
+    if (late && S.bg) {
+      const bgEl = document.getElementById('panel-bg');
+      bgEl.classList.remove('fade-in');
+      void bgEl.offsetWidth;
+      bgEl.classList.add('fade-in');
+    }
+    reveal();
+  });
+
+  // 记录卡顿：界面一次忙超过 150ms 就写进日志，方便排查
+  try {
+    let lastLog = 0;
+    new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) {
+        if (e.duration < 150 || Date.now() - lastLog < 5000) continue;
+        lastLog = Date.now();
+        uiLog('long task ' + Math.round(e.duration) + 'ms view=' + S.view + (S.edit ? ' edit' : ''));
+      }
+    }).observe({ entryTypes: ['longtask'] });
+  } catch (_) {}
 
   api.onData((data) => { NL.setData(data); });
 

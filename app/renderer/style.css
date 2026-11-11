@@ -76,6 +76,14 @@ svg { display: block; flex-shrink: 0; }
   padding: 18px 22px 12px;
 }
 #panel.pop { animation: pop 0.16s ease-out; }
+/* 刚打开、还在等背景截图：先不显示（最多等几百毫秒） */
+#panel.waiting { opacity: 0; animation: none; }
+/* 背景截图还没到或失败时，底色加深，保证字看得清 */
+#panel:not(.waiting) #panel-tint { transition: background-color 0.2s ease; }
+#panel.no-bg #panel-tint { background: rgb(14 18 30 / max(var(--alpha), 0.82)); }
+/* 截图晚到时，背景淡入 */
+#panel-bg.fade-in { animation: bg-in 0.22s ease-out; }
+@keyframes bg-in { from { opacity: 0; } to { opacity: 1; } }
 #panel.dropping { box-shadow: inset 0 0 0 2px var(--accent), 0 10px 24px rgba(0, 0, 0, 0.35); }
 @keyframes pop {
   from { opacity: 0; transform: translateY(14px) scale(0.985); }

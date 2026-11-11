@@ -25,7 +25,9 @@
     if (st.accent) document.documentElement.style.setProperty('--accent', st.accent);
     panel.classList.toggle('glass', glass);
     const hasBg = !!(S.bg && S.bg.url);
-    panelBg.style.display = hasBg && (blur > 0 || glass) ? 'block' : 'none';
+    const showBg = hasBg && (blur > 0 || glass);
+    panelBg.style.display = showBg ? 'block' : 'none';
+    panel.classList.toggle('no-bg', !showBg && blur > 0);
     try {
       const sc = (Number(st.glassStrength) || 0) * 0.9;
       lgR.setAttribute('scale', sc.toFixed(1));

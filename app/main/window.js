@@ -2,6 +2,7 @@
 
 // 启动台窗口：透明无边框、始终置顶，显示在停靠栏上方居中
 const { BrowserWindow, screen, desktopCapturer } = require('electron');
+const os = require('os');
 const ctx = require('./context');
 const config = require('./config');
 const store = require('./store');
@@ -9,7 +10,13 @@ const scanner = require('./scanner');
 const { diag } = require('./log');
 
 let currentDisplay = null;
-let opening = false;
+let openSeq = 0;           // 每次打开面板的编号：晚到的截图只认最近一次打开
+
+// Windows 10 2004（内部版本 19041）起可以把窗口排除在截图之外，
+// 这样面板可以先显示出来，再同时去截它后面的画面
+const CAN_EXCLUDE_FROM_CAPTURE = process.platform === 'win32' && Number(String(os.release()).split('.')[2] || 0) >= 19041;
+// 截图最多等这么久；偶尔系统截图接口卡住时，不能让面板跟着打不开
+const CAPTURE_TIMEOUT_MS = 1500;
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -99,24 +106,40 @@ async function captureBehind(display) {
   }
 }
 
+function withTimeout(promise, ms) {
+  let timer;
+  return Promise.race([
+    promise.finally(() => clearTimeout(timer)),
+    new Promise((resolve) => { timer = setTimeout(() => resolve(null), ms); })
+  ]);
+}
+
+/* 打开面板：
+   1. 立刻显示窗口，界面先保持透明（等背景截图，最多等一小会儿），按快捷键马上有反应；
+   2. 同时截取面板后方的画面，到了就交给界面做模糊和液态玻璃；
+   3. 截图慢或失败时，界面先用不透明一点的底色显示，不会卡在“打不开”。 */
 async function showPanel() {
   const win = ctx.win;
-  if (!win || opening) return;
-  opening = true;
-  try {
-    const { display, panelRect } = positionWindow();
-    const bg = await captureBehind(display);
-    const data = store.buildData();
-    const st = ctx.state;
-    if (st.notice.length) { data.notice = st.notice.slice(); st.notice = []; store.saveState(); }
-    if (ctx.dev) diag('open bg=' + (bg ? bg.width + 'x' + bg.height : 'none') + ' panel=' + panelRect.width + 'x' + panelRect.height + ' scale=' + display.scaleFactor);
-    win.webContents.send('panel:open', data, bg, panelRect);
-    win.show();
-    win.moveTop();
-    win.focus();
-  } finally {
-    opening = false;
-  }
+  if (!win) return;
+  const seq = ++openSeq;
+  const t0 = Date.now();
+  const { display, panelRect } = positionWindow();
+  const data = store.buildData();
+  const st = ctx.state;
+  if (st.notice.length) { data.notice = st.notice.slice(); st.notice = []; store.saveState(); }
+  win.webContents.send('panel:open', data, panelRect, {
+    maxWait: CAN_EXCLUDE_FROM_CAPTURE ? 300 : CAPTURE_TIMEOUT_MS,
+    lateBgOk: CAN_EXCLUDE_FROM_CAPTURE
+  });
+  if (CAN_EXCLUDE_FROM_CAPTURE) { try { win.setContentProtection(true); } catch (_) {} }
+  win.show();
+  win.moveTop();
+  win.focus();
+
+  const bg = await withTimeout(captureBehind(display), CAPTURE_TIMEOUT_MS);
+  if (CAN_EXCLUDE_FROM_CAPTURE && seq === openSeq) { try { win.setContentProtection(false); } catch (_) {} }
+  if (ctx.dev) diag('open capture=' + (Date.now() - t0) + 'ms bg=' + (bg ? bg.width + 'x' + bg.height : 'none') + ' scale=' + display.scaleFactor);
+  if (seq === openSeq && win.isVisible()) win.webContents.send('panel:bg', bg, panelRect);
   if (Date.now() - ctx.lastScan > config.RESCAN_ON_OPEN_MS) scanner.runScan();
 }
 
@@ -126,7 +149,7 @@ function hidePanel() {
 }
 
 function toggle() {
-  if (!ctx.win || opening) return;
+  if (!ctx.win) return;
   if (ctx.win.isVisible()) hidePanel();
   else showPanel();
 }

@@ -22,6 +22,8 @@ async function runScan() {
   if (ctx.scanning) { ctx.rescanPending = true; return; }
   ctx.scanning = true;
   ctx.lastScan = Date.now();
+  const wasEmpty = ctx.catalog.length === 0;
+  let changed = false;
   try {
     const script = '$IconDir = ' + ps.quote(ctx.paths.iconDir) + '\n' + ps.readScript('scan.ps1');
     const res = await ps.run(script, 180000);
@@ -49,19 +51,27 @@ async function runScan() {
     list.sort((x, y) => x.name.localeCompare(y.name, 'zh-CN'));
     await icons.fillMissingIcons(list);
     scanDiag();
-    applyScan(list);
+    changed = applyScan(list);
   } catch (e) {
     log('scan failed: ' + (e && e.stack || e));
   } finally {
     ctx.scanning = false;
-    store.pushData();
+    // 扫描结果和上次一样就不打扰界面（面板开着时不会重绘、不会闪）
+    if (changed || wasEmpty) store.pushData();
     if (ctx.rescanPending) { ctx.rescanPending = false; setTimeout(runScan, 1000); }
   }
 }
 
+// 用来判断两次扫描结果是否一样
+function signature(list) {
+  return JSON.stringify(list.map((a) => [a.key, a.name, a.path, a.iconT || a.icon, a.iconScale]));
+}
+
+// 返回 true 表示应用列表有变化
 function applyScan(list) {
-  if (list.length < 3) return; // 扫描异常时不动现有数据
+  if (list.length < 3) return false; // 扫描异常时不动现有数据
   const st = ctx.state;
+  if (st.initialized && signature(list) === signature(ctx.catalog)) return false;
   store.clearIconCache();
   store.setCatalog(list);
   try { fs.writeFileSync(ctx.paths.catalogPath, JSON.stringify(list)); } catch (_) {}
@@ -96,6 +106,7 @@ function applyScan(list) {
     log('auto added: ' + added.join(', '));
   }
   store.saveState();
+  return true;
 }
 
 // 面板上的「刷新」：重新扫描，等结束后返回新增了哪些

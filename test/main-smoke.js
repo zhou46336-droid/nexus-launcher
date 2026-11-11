@@ -170,10 +170,29 @@ const call = (ch, ...args) => handlers.get(ch)({}, ...args);
   await panel.showPanel();
   const open = sent.find((m) => m[0] === 'panel:open');
   assert.ok(open, 'panel:open sent');
-  assert.deepStrictEqual(open[3], { x: 560, y: 360, width: 800, height: 500 });
+  assert.deepStrictEqual(open[2], { x: 560, y: 360, width: 800, height: 500 });
+  assert.ok(open[1].catalog.every((c) => c.icon === null), 'catalog icons are not sent on open');
+  assert.ok(sent.find((m) => m[0] === 'panel:bg'), 'panel:bg sent after capture');
+  assert.strictEqual((await call('catalog:get')).length, 4);
   assert.ok(ctx.win.isVisible());
   panel.toggle();
   assert.ok(!ctx.win.isVisible());
+
+  // 系统截图接口卡住时：面板照样立刻显示，1.5 秒后放弃截图，之后还能正常开关
+  fakeElectron.desktopCapturer.getSources = () => new Promise(() => {});
+  sent.length = 0;
+  const pending = panel.showPanel();
+  assert.ok(ctx.win.isVisible(), 'panel shows without waiting for the capture');
+  panel.toggle();
+  assert.ok(!ctx.win.isVisible(), 'can close while capture is pending');
+  panel.toggle();
+  assert.ok(ctx.win.isVisible(), 'can reopen while an earlier capture is still pending');
+  await pending;
+  await new Promise((r) => setTimeout(r, 1600));
+  const bgs = sent.filter((m) => m[0] === 'panel:bg');
+  assert.strictEqual(bgs.length, 1, 'only the latest open gets a background');
+  assert.strictEqual(bgs[0][1], null, 'gives up on a stuck capture');
+  panel.toggle();
 
   // 状态写盘
   require('../app/main/store').writeState();

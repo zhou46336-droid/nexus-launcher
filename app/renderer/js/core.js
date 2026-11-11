@@ -26,7 +26,11 @@
     wheelAt: 0,
     refreshing: false,
     bg: null,            // 面板后方的截图
-    panelRect: null      // 面板在屏幕上的位置
+    panelRect: null,     // 面板在屏幕上的位置
+    revealed: true,      // 面板是否已经显示出来（打开时会先等一下背景截图）
+    lateBgOk: true,      // 面板显示后再到的截图能不能用
+    waitTimer: null,
+    catalogIcons: null   // 「添加应用」列表的图标，第一次进入时才向主进程要
   };
 
   const cols = () => (S.data.settings && S.data.settings.cols) || 8;

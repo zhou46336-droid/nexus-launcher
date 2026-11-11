@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld('launcher', {
   pathForFile: (file) => { try { return webUtils.getPathForFile(file); } catch (_) { return ''; } },
   setSetting: (key, value) => ipcRenderer.invoke('settings:set', key, value),
   onMoved: (cb) => ipcRenderer.on('panel:moved', (_e, rect) => cb(rect)),
-  onOpen: (cb) => ipcRenderer.on('panel:open', (_e, data, bg, rect) => cb(data, bg, rect)),
+  getCatalog: () => ipcRenderer.invoke('catalog:get'),
+  onOpen: (cb) => ipcRenderer.on('panel:open', (_e, data, rect, opts) => cb(data, rect, opts)),
+  onBg: (cb) => ipcRenderer.on('panel:bg', (_e, bg, rect) => cb(bg, rect)),
   onData: (cb) => ipcRenderer.on('data:changed', (_e, data) => cb(data))
 });

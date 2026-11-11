@@ -13,6 +13,17 @@
     NL.render();
     const s = document.getElementById('add-search');
     if (s) s.focus();
+    loadCatalogIcons();
+  }
+
+  // 已安装应用的图标比较多，只在进入「添加应用」时向主进程要一次
+  async function loadCatalogIcons() {
+    if (S.catalogIcons || !api.getCatalog) return;
+    let list = [];
+    try { list = await api.getCatalog(); } catch (_) { list = []; }
+    S.catalogIcons = new Map(list.filter((c) => c.icon).map((c) => [c.key, c.icon]));
+    const el = document.querySelector('.list');
+    if (el && S.view === 'add' && S.addTab === 'installed') fillList(el);
   }
 
   function closeAdd() {
@@ -124,7 +135,7 @@
         title: c.path || ''
       },
       cb,
-      tileIcon({ name: c.name, icon: c.icon, iconScale: c.iconScale, kind: 'app' }, 34),
+      tileIcon({ name: c.name, icon: c.icon || (S.catalogIcons && S.catalogIcons.get(c.key)), iconScale: c.iconScale, kind: 'app' }, 34),
       h('span', { class: 'row-text' },
         h('span', { class: 'row-name', text: c.name }),
         h('span', { class: 'row-path', text: c.path || '' })),

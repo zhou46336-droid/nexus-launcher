@@ -38,6 +38,7 @@ function register() {
   const st = () => ctx.state;
 
   ipcMain.handle('data:get', () => store.buildData());
+  ipcMain.handle('catalog:get', () => store.catalogView(true));
 
   ipcMain.handle('app:launch', (_e, key) => { actions.launch(str(key)); });
 
