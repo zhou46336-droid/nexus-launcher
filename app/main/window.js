@@ -1,7 +1,7 @@
 'use strict';
 
 // 启动台窗口：透明无边框、始终置顶，显示在停靠栏上方居中
-const { BrowserWindow, screen, desktopCapturer } = require('electron');
+const { BrowserWindow, screen, desktopCapturer, ipcMain } = require('electron');
 const os = require('os');
 const ctx = require('./context');
 const config = require('./config');
@@ -12,6 +12,8 @@ const { diag } = require('./log');
 
 let currentDisplay = null;
 let openSeq = 0;           // 每次打开面板的编号：晚到的截图只认最近一次打开
+let hideToken = 0;
+let pendingHide = null;    // 正在收起：等界面把自己变透明
 
 // Windows 10 2004（内部版本 19041）起可以把窗口排除在截图之外，
 // 这样面板可以先显示出来，再同时去截它后面的画面
@@ -65,6 +67,7 @@ function createWindow() {
     autohide.onBlur();
   });
   win.on('focus', () => autohide.stop());
+  ipcMain.on('panel:cleared', (_e, token) => finishHide(token));
   win.on('close', (e) => {
     if (!ctx.quitting) { e.preventDefault(); hidePanel(); }
   });
@@ -124,6 +127,7 @@ function withTimeout(promise, ms) {
 async function showPanel(extra) {
   const win = ctx.win;
   if (!win) return;
+  if (pendingHide) { clearTimeout(pendingHide.timer); pendingHide = null; }
   const seq = ++openSeq;
   const t0 = Date.now();
   const { display, panelRect } = positionWindow();
@@ -149,7 +153,7 @@ async function showPanel(extra) {
 
 // 面板开着时显示一条提示；关着就打开面板并显示
 function notify(text, jumpToEnd) {
-  if (ctx.win && ctx.win.isVisible()) {
+  if (isShown()) {
     store.pushData();
     ctx.win.webContents.send('panel:toast', text, !!jumpToEnd);
   } else {
@@ -157,15 +161,35 @@ function notify(text, jumpToEnd) {
   }
 }
 
+/* 收起面板：先让界面变成全透明、画出这一帧，再真正隐藏窗口。
+   Windows 重新显示窗口时会先把「上一帧」拿出来显示，
+   如果上一帧还是面板的样子，就会先闪一下旧画面再消失。 */
 function hidePanel() {
   autohide.stop();
-  if (!ctx.win || !ctx.win.isVisible()) return;
-  ctx.win.hide();
+  const win = ctx.win;
+  if (!win || !win.isVisible() || pendingHide) return;
+  const token = ++hideToken;
+  const seq = ++openSeq; // 正在进行的截图作废
+  pendingHide = { token, seq, timer: setTimeout(() => finishHide(token), 150) };
+  win.webContents.send('panel:clear', token);
+}
+
+function finishHide(token) {
+  const p = pendingHide;
+  if (!p || p.token !== token) return;
+  pendingHide = null;
+  clearTimeout(p.timer);
+  if (openSeq === p.seq && ctx.win && ctx.win.isVisible()) ctx.win.hide();
+}
+
+// 面板是否处于打开状态（正在收起的不算）
+function isShown() {
+  return !!(ctx.win && ctx.win.isVisible() && !pendingHide);
 }
 
 function toggle() {
   if (!ctx.win) return;
-  if (ctx.win.isVisible()) hidePanel();
+  if (isShown()) hidePanel();
   else showPanel();
 }
 
@@ -176,4 +200,4 @@ function reposition() {
   ctx.win.webContents.send('panel:moved', panelRect);
 }
 
-module.exports = { createWindow, showPanel, hidePanel, toggle, reposition, notify };
+module.exports = { createWindow, showPanel, hidePanel, toggle, reposition, notify, isShown };

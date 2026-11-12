@@ -157,6 +157,14 @@ async function openPanel(page, extra) {
   assert.strictEqual(await page.locator('.grid .tile').count(), 21);
   await shot('narrow');
 
+  // 收起前先变透明并回报主进程；再次打开时等背景到了才显示
+  await page.evaluate(() => window.__clear(7));
+  await page.waitForTimeout(150);
+  assert.strictEqual(await page.evaluate(() => document.documentElement.classList.contains('cleared')), true, 'cleared before hiding');
+  assert.strictEqual(await page.evaluate(() => window.__cleared), 7, 'reports back after painting the cleared frame');
+  await openPanel(page, { panelWidth: 720 });
+  assert.strictEqual(await page.evaluate(() => document.documentElement.classList.contains('cleared')), false, 'visible again after reopening');
+
   // 10. Esc 收起面板
   await page.keyboard.press('Escape');
   assert.strictEqual(await page.evaluate(() => window.__hidden), true);

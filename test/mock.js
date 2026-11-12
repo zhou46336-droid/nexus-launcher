@@ -46,6 +46,8 @@
     onOpen: (cb) => { window.__open = cb; },
     onBg: (cb) => { window.__bg = cb; },
     onToast: (cb) => { window.__toast = cb; },
+    onClear: (cb) => { window.__clear = cb; },
+    cleared: (t) => { window.__cleared = t; },
     getCatalog: async () => { const shown = new Set(order); return catalog.map(c => Object.assign({}, c, { added: shown.has(c.key) })); },
     log: (m) => console.error('[uilog] ' + m),
     exportIcon: async () => ({ ok: true }),

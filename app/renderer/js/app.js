@@ -121,6 +121,7 @@
     if (S.revealed) return;
     S.revealed = true;
     void panel.offsetWidth; // 先让底色在透明状态下变好，显示时不要再播一次渐变
+    document.documentElement.classList.remove('cleared');
     panel.classList.remove('waiting');
     panel.classList.remove('pop');
     void panel.offsetWidth;
@@ -153,6 +154,15 @@
       const names = data.notice.slice(0, 3).join('、') + (data.notice.length > 3 ? ' 等 ' + data.notice.length + ' 个' : '');
       NL.showToast({ text: '已自动添加新安装的应用：' + names, ms: 5000 });
     }
+  });
+
+  // 主进程要收起面板：先变透明并画出来，再告诉主进程可以隐藏窗口了
+  api.onClear((token) => {
+    clearTimeout(S.waitTimer);
+    S.revealed = false;
+    document.documentElement.classList.add('cleared');
+    NL.closeMenu();
+    requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => api.cleared(token), 0)));
   });
 
   // 面板开着时，主进程发来的提示（例如把图标拖到「更多应用」上添加成功）

@@ -29,7 +29,11 @@ class FakeWebContents {
   constructor() { this.listeners = {}; }
   on(ev, fn) { this.listeners[ev] = fn; }
   once(ev, fn) { this.listeners[ev] = fn; }
-  send(...args) { sent.push(args); }
+  send(...args) {
+    sent.push(args);
+    // 模拟界面：收到「收起」后马上回报已经变透明
+    if (args[0] === 'panel:clear' && handlers.has('panel:cleared')) handlers.get('panel:cleared')({}, args[1]);
+  }
   setWindowOpenHandler() {}
 }
 class FakeWindow {

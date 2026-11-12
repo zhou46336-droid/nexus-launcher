@@ -76,6 +76,8 @@ svg { display: block; flex-shrink: 0; }
   padding: 18px 22px 12px;
 }
 #panel.pop { animation: pop 0.16s ease-out; }
+/* 收起前整个界面先变透明（见 window.js 的 hidePanel），重新显示时不会闪旧画面 */
+html.cleared body { opacity: 0; }
 /* 刚打开、还在等背景截图：先不显示（最多等几百毫秒） */
 #panel.waiting { opacity: 0; animation: none; }
 /* 背景截图还没到或失败时，底色加深，保证字看得清 */

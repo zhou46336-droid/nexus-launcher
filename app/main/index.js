@@ -101,7 +101,7 @@ if (process.argv.includes('--uninstall-cleanup')) {
     if (!ctx.win || argv.includes('--hidden')) return;
     const files = droppedFiles(argv);
     if (files.length) { addDroppedOnIcon(files); return; }
-    if (ctx.win.isVisible()) panel.hidePanel();
+    if (panel.isShown()) panel.hidePanel();
     else if (Date.now() - ctx.lastBlurHide > 500) panel.showPanel();
   });
   app.whenReady().then(init);
