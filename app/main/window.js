@@ -1,15 +1,25 @@
 'use strict';
 
 // 启动台窗口：透明无边框、始终置顶，显示在停靠栏上方居中
-const { BrowserWindow, screen, desktopCapturer } = require('electron');
+const { BrowserWindow, screen, desktopCapturer, ipcMain } = require('electron');
+const os = require('os');
 const ctx = require('./context');
 const config = require('./config');
 const store = require('./store');
 const scanner = require('./scanner');
+const autohide = require('./autohide');
 const { diag } = require('./log');
 
 let currentDisplay = null;
-let opening = false;
+let openSeq = 0;           // 每次打开面板的编号：晚到的截图只认最近一次打开
+let hideToken = 0;
+let pendingHide = null;    // 正在收起：等界面把自己变透明
+
+// Windows 10 2004（内部版本 19041）起可以把窗口排除在截图之外，
+// 这样面板可以先显示出来，再同时去截它后面的画面
+const CAN_EXCLUDE_FROM_CAPTURE = process.platform === 'win32' && Number(String(os.release()).split('.')[2] || 0) >= 19041;
+// 截图最多等这么久；偶尔系统截图接口卡住时，不能让面板跟着打不开
+const CAPTURE_TIMEOUT_MS = 1500;
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -50,11 +60,14 @@ function createWindow() {
   win.webContents.on('render-process-gone', (_e, d) => diag('render gone: ' + (d && d.reason)));
   win.webContents.on('unresponsive', () => diag('unresponsive'));
   win.webContents.on('did-fail-load', (_e, code, desc) => diag('load failed: ' + code + ' ' + desc));
+  // 点到面板外面就收起（从桌面往面板里拖东西时除外，见 autohide.js）
+  autohide.init(hidePanel);
   win.on('blur', () => {
     if (ctx.suppressBlur || !win.isVisible()) return;
-    ctx.lastBlurHide = Date.now();
-    hidePanel();
+    autohide.onBlur();
   });
+  win.on('focus', () => autohide.stop());
+  ipcMain.on('panel:cleared', (_e, token) => finishHide(token));
   win.on('close', (e) => {
     if (!ctx.quitting) { e.preventDefault(); hidePanel(); }
   });
@@ -99,35 +112,85 @@ async function captureBehind(display) {
   }
 }
 
-async function showPanel() {
+function withTimeout(promise, ms) {
+  let timer;
+  return Promise.race([
+    promise.finally(() => clearTimeout(timer)),
+    new Promise((resolve) => { timer = setTimeout(() => resolve(null), ms); })
+  ]);
+}
+
+/* 打开面板：
+   1. 立刻显示窗口，界面先保持透明，等背景截图；
+   2. 同时截取面板后方的画面，到了就交给界面做模糊和液态玻璃，面板这时才弹出来；
+   3. 截图卡住（超过 1.5 秒）或失败时，界面改用不透明一点的底色显示，不会卡在“打不开”。 */
+async function showPanel(extra) {
   const win = ctx.win;
-  if (!win || opening) return;
-  opening = true;
-  try {
-    const { display, panelRect } = positionWindow();
-    const bg = await captureBehind(display);
-    const data = store.buildData();
-    const st = ctx.state;
-    if (st.notice.length) { data.notice = st.notice.slice(); st.notice = []; store.saveState(); }
-    if (ctx.dev) diag('open bg=' + (bg ? bg.width + 'x' + bg.height : 'none') + ' panel=' + panelRect.width + 'x' + panelRect.height + ' scale=' + display.scaleFactor);
-    win.webContents.send('panel:open', data, bg, panelRect);
-    win.show();
-    win.moveTop();
-    win.focus();
-  } finally {
-    opening = false;
-  }
+  if (!win) return;
+  if (pendingHide) { clearTimeout(pendingHide.timer); pendingHide = null; }
+  const seq = ++openSeq;
+  const t0 = Date.now();
+  const { display, panelRect } = positionWindow();
+  const data = store.buildData();
+  const st = ctx.state;
+  if (st.notice.length) { data.notice = st.notice.slice(); st.notice = []; store.saveState(); }
+  win.webContents.send('panel:open', data, panelRect, Object.assign({
+    // 等背景截图到了再显示，避免先闪一下深色底（截图一般 0.3~0.5 秒）；截图卡住时最多等 1.5 秒
+    maxWait: CAPTURE_TIMEOUT_MS,
+    lateBgOk: CAN_EXCLUDE_FROM_CAPTURE
+  }, extra && typeof extra === 'object' && !extra.sender ? { toast: extra.toast, jumpToEnd: !!extra.jumpToEnd } : {}));
+  if (CAN_EXCLUDE_FROM_CAPTURE) { try { win.setContentProtection(true); } catch (_) {} }
+  win.show();
+  win.moveTop();
+  win.focus();
+
+  const bg = await withTimeout(captureBehind(display), CAPTURE_TIMEOUT_MS);
+  if (CAN_EXCLUDE_FROM_CAPTURE && seq === openSeq) { try { win.setContentProtection(false); } catch (_) {} }
+  if (ctx.dev) diag('open capture=' + (Date.now() - t0) + 'ms bg=' + (bg ? bg.width + 'x' + bg.height : 'none') + ' scale=' + display.scaleFactor);
+  if (seq === openSeq && win.isVisible()) win.webContents.send('panel:bg', bg, panelRect);
   if (Date.now() - ctx.lastScan > config.RESCAN_ON_OPEN_MS) scanner.runScan();
 }
 
+// 面板开着时显示一条提示；关着就打开面板并显示
+function notify(text, jumpToEnd) {
+  if (isShown()) {
+    store.pushData();
+    ctx.win.webContents.send('panel:toast', text, !!jumpToEnd);
+  } else {
+    showPanel({ toast: text, jumpToEnd });
+  }
+}
+
+/* 收起面板：界面先播放关闭动画，变成全透明并画出这一帧，再真正隐藏窗口。
+   Windows 重新显示窗口时会先把「上一帧」拿出来显示，
+   如果上一帧还是面板的样子，就会先闪一下旧画面再消失。 */
 function hidePanel() {
-  if (!ctx.win || !ctx.win.isVisible()) return;
-  ctx.win.hide();
+  autohide.stop();
+  const win = ctx.win;
+  if (!win || !win.isVisible() || pendingHide) return;
+  const token = ++hideToken;
+  const seq = ++openSeq; // 正在进行的截图作废
+  // 界面播完关闭动画（约 0.17 秒）后回报；万一没回报，最多等 0.45 秒也会隐藏
+  pendingHide = { token, seq, timer: setTimeout(() => finishHide(token), 450) };
+  win.webContents.send('panel:clear', token);
+}
+
+function finishHide(token) {
+  const p = pendingHide;
+  if (!p || p.token !== token) return;
+  pendingHide = null;
+  clearTimeout(p.timer);
+  if (openSeq === p.seq && ctx.win && ctx.win.isVisible()) ctx.win.hide();
+}
+
+// 面板是否处于打开状态（正在收起的不算）
+function isShown() {
+  return !!(ctx.win && ctx.win.isVisible() && !pendingHide);
 }
 
 function toggle() {
-  if (!ctx.win || opening) return;
-  if (ctx.win.isVisible()) hidePanel();
+  if (!ctx.win) return;
+  if (isShown()) hidePanel();
   else showPanel();
 }
 
@@ -138,4 +201,4 @@ function reposition() {
   ctx.win.webContents.send('panel:moved', panelRect);
 }
 
-module.exports = { createWindow, showPanel, hidePanel, toggle, reposition };
+module.exports = { createWindow, showPanel, hidePanel, toggle, reposition, notify, isShown };

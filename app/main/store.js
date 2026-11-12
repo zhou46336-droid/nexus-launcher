@@ -99,6 +99,19 @@ function itemView(key) {
   return { key, name: c.name, icon: c.icon || null, iconScale: c.iconScale || null, kind: c.kind, hasPath: c.kind !== 'url', pinned };
 }
 
+// 「添加应用」里的已安装应用列表。图标比较大（约 1MB），只在打开「添加应用」时才发
+function catalogView(withIcons) {
+  const inOrder = new Set(ctx.state.order);
+  return ctx.catalog.map((a) => ({
+    key: a.key,
+    name: a.name,
+    icon: withIcons ? iconData(a.iconT || a.icon) : null,
+    iconScale: a.iconScale || null,
+    path: a.path || (a.uwp ? 'Microsoft Store 应用' : a.appId),
+    added: inOrder.has(a.key)
+  }));
+}
+
 // 界面需要的全部数据：启动台列表、最近/常用、可添加的应用、外观设置
 function buildData() {
   const st = ctx.state;
@@ -109,15 +122,7 @@ function buildData() {
   const pinned = st.pinned.filter((k) => shown.has(k));
   const byCount = used.filter((k) => !pinned.includes(k)).sort((a, b) => st.usage[b].count - st.usage[a].count);
   const frequent = pinned.concat(byCount).slice(0, 8);
-  const inOrder = new Set(st.order);
-  const catalog = ctx.catalog.map((a) => ({
-    key: a.key,
-    name: a.name,
-    icon: iconData(a.iconT || a.icon),
-    iconScale: a.iconScale || null,
-    path: a.path || (a.uwp ? 'Microsoft Store 应用' : a.appId),
-    added: inOrder.has(a.key)
-  }));
+  const catalog = catalogView(false);
   const s = st.settings;
   return {
     items, recent, frequent, catalog,
@@ -152,5 +157,5 @@ function touchUsage(key) {
 
 module.exports = {
   initPaths, loadState, writeState, saveState, setCatalog,
-  panelWidth, columns, clearIconCache, buildData, pushData, touchUsage
+  panelWidth, columns, clearIconCache, catalogView, buildData, pushData, touchUsage
 };

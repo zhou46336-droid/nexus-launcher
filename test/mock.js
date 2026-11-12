@@ -22,7 +22,7 @@
     const used = Object.keys(usage).filter(k => shown.has(k));
     const recent = used.slice().sort((a, b) => usage[b].last - usage[a].last).slice(0, 8);
     const freq = pinned.concat(used.filter(k => !pinned.includes(k)).sort((a, b) => usage[b].count - usage[a].count)).slice(0, 8);
-    return { items, recent, frequent: freq, catalog: catalog.map(c => Object.assign({}, c, { added: shown.has(c.key) })), loading: false, settings: Object.assign({ hotkey: 'Alt+Q', panelAlpha: 0.6, blur: window.__blur || 14, panelWidth: window.__w || 800, bottomOffset: 180, accent: '#7CC7FF', glass: true, glassStrength: 30, cols: (window.__w || 800) < 780 ? 7 : 8 }, window.__set || {}) };
+    return { items, recent, frequent: freq, catalog: catalog.map(c => Object.assign({}, c, { icon: null, added: shown.has(c.key) })), loading: false, settings: Object.assign({ hotkey: 'Alt+Q', panelAlpha: 0.6, blur: window.__blur || 14, panelWidth: window.__w || 800, bottomOffset: 180, accent: '#7CC7FF', glass: true, glassStrength: 30, cols: (window.__w || 800) < 780 ? 7 : 8 }, window.__set || {}) };
   }
   window.__mock = { data, setOrder: (o) => { order = o; } };
   window.launcher = {
@@ -44,6 +44,11 @@
     rescan: () => new Promise(r => setTimeout(() => r({ added: ['Blender'], data: data() }), 800)),
     pathForFile: () => '',
     onOpen: (cb) => { window.__open = cb; },
+    onBg: (cb) => { window.__bg = cb; },
+    onToast: (cb) => { window.__toast = cb; },
+    onClear: (cb) => { window.__clear = cb; },
+    cleared: (t) => { window.__cleared = t; },
+    getCatalog: async () => { const shown = new Set(order); return catalog.map(c => Object.assign({}, c, { added: shown.has(c.key) })); },
     log: (m) => console.error('[uilog] ' + m),
     exportIcon: async () => ({ ok: true }),
     onData: (cb) => { window.__onData = cb; }

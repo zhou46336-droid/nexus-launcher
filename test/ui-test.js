@@ -32,9 +32,11 @@ async function openPanel(page, extra) {
     const url = eval(wallpaper); // eslint-disable-line no-eval
     window.__set = Object.assign({}, extra || {});
     const d = await window.launcher.getData();
-    window.__open(d, { url, x: 0, y: 0, width: 1600, height: 900 }, { x: 380, y: 250, width: d.settings.panelWidth, height: 500 });
+    const rect = { x: 380, y: 250, width: d.settings.panelWidth, height: 500 };
+    window.__open(d, rect, { maxWait: 300, lateBgOk: true });
+    setTimeout(() => window.__bg({ url, x: 0, y: 0, width: 1600, height: 900 }, rect), 50);
   }, [WALLPAPER, extra]);
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(400);
 }
 
 (async () => {
@@ -59,6 +61,18 @@ async function openPanel(page, extra) {
     await page.locator('#panel').screenshot({ path: path.join(ROOT, 'docs', 'images', name + '.png'), omitBackground: true });
     await page.addStyleTag({ content: 'html, body { background: #101522 !important; }' });
   };
+
+  // 0. 打开流程：截图到之前面板透明；截图一直不来时 300ms 后用深一点的底色显示；晚到的截图淡入
+  await page.evaluate(async () => {
+    const d = await window.launcher.getData();
+    window.__open(d, { x: 380, y: 250, width: 800, height: 500 }, { maxWait: 300, lateBgOk: true });
+  });
+  assert.ok(await page.locator('#panel.waiting').count(), 'panel waits for the background');
+  await page.waitForTimeout(400);
+  assert.strictEqual(await page.locator('#panel.waiting').count(), 0, 'panel shows after the wait');
+  assert.ok(await page.locator('#panel.no-bg').count(), 'darker fallback tint without a background');
+  await openPanel(page);
+  assert.strictEqual(await page.locator('#panel.no-bg').count(), 0, 'glass background applied');
 
   // 1. 主界面：8 列 × 3 行，最近使用 8 个，两页
   assert.strictEqual(await page.locator('.grid .tile').count(), 24);
@@ -111,8 +125,10 @@ async function openPanel(page, extra) {
   await page.keyboard.press('PageUp');
   assert.strictEqual(await page.locator('.dot.on').getAttribute('aria-label'), '第 1 页');
 
-  // 7. 添加应用：勾选两个
+  // 7. 添加应用：图标进入时才加载；勾选两个
   await page.click('.head >> text=添加应用');
+  await page.waitForTimeout(150);
+  assert.ok(await page.locator('.list .row img').count() > 10, 'catalog icons loaded lazily');
   await page.locator('.row:not(.added)').nth(0).click();
   await page.locator('.row:not(.added)').nth(1).click();
   assert.strictEqual(await page.locator('#add-confirm').innerText(), '添加 2 个应用');
@@ -140,6 +156,17 @@ async function openPanel(page, extra) {
   await openPanel(page, { panelWidth: 720 });
   assert.strictEqual(await page.locator('.grid .tile').count(), 21);
   await shot('narrow');
+
+  // 收起前先变透明并回报主进程；再次打开时等背景到了才显示
+  await page.evaluate(() => window.__clear(7));
+  await page.waitForTimeout(60);
+  assert.ok(await page.locator('#panel.closing').count(), 'plays the closing animation');
+  assert.strictEqual(await page.evaluate(() => window.__cleared), undefined, 'waits for the animation before reporting');
+  await page.waitForTimeout(300);
+  assert.strictEqual(await page.evaluate(() => document.documentElement.classList.contains('cleared')), true, 'cleared before hiding');
+  assert.strictEqual(await page.evaluate(() => window.__cleared), 7, 'reports back after painting the cleared frame');
+  await openPanel(page, { panelWidth: 720 });
+  assert.strictEqual(await page.evaluate(() => document.documentElement.classList.contains('cleared')), false, 'visible again after reopening');
 
   // 10. Esc 收起面板
   await page.keyboard.press('Escape');

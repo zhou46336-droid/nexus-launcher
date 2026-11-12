@@ -58,15 +58,16 @@ function openLocation(key) {
   shell.showItemInFolder(p);
 }
 
-// 添加一个文件或文件夹（拖进面板 / 文件选择框）
+// 添加一个文件或文件夹（拖进面板 / 文件选择框 / 拖到「更多应用」图标上）
+// 返回 { status: 'added' | 'exists' | 'invalid', name }
 async function addPath(p) {
-  if (typeof p !== 'string' || !p) return false;
+  if (typeof p !== 'string' || !p) return { status: 'invalid' };
   let st;
-  try { st = fs.statSync(p); } catch (_) { return false; }
+  try { st = fs.statSync(p); } catch (_) { return { status: 'invalid' }; }
   const isDir = st.isDirectory();
   const key = (isDir ? 'dir:' : 'file:') + p.toLowerCase();
-  if (ctx.state.order.includes(key)) return false;
   const name = path.basename(p).replace(/\.(lnk|url|exe|bat|cmd)$/i, '') || p;
+  if (ctx.state.order.includes(key)) return { status: 'exists', name: (ctx.state.custom[key] || {}).name || name };
   let icon = null;
   let iconScale = null;
   try {
@@ -78,7 +79,52 @@ async function addPath(p) {
   ctx.state.custom[key] = { name, kind: isDir ? 'folder' : 'file', target: p, icon, iconScale };
   ctx.state.order.push(key);
   store.saveState();
-  return true;
+  return { status: 'added', name };
+}
+
+/* 拖进来的如果就是某个已安装的应用（桌面快捷方式、程序本身），直接用扫描到的那个应用：
+   名字是开始菜单里的正式名字，图标也是统一处理过的高清图标。 */
+const norm = (p) => String(p || '').toLowerCase().replace(/\//g, '\\');
+function linkTarget(p) {
+  if (!/\.lnk$/i.test(p)) return '';
+  try { return shell.readShortcutLink(p).target || ''; } catch (_) { return ''; }
+}
+
+function findCatalogApp(p) {
+  if (!/\.(lnk|url|exe)$/i.test(p)) return null;
+  const np = norm(p);
+  const target = norm(linkTarget(p) || p);
+  // 1. 路径一样，或者指向同一个程序
+  for (const a of ctx.catalog) {
+    if (norm(a.path) === np || norm(a.path) === target || norm(a.appId) === target) return a;
+  }
+  // 2. 开始菜单里的快捷方式也指向同一个程序
+  if (/\.exe$/i.test(target)) {
+    for (const a of ctx.catalog) {
+      if (a.path && /\.lnk$/i.test(a.path) && norm(linkTarget(a.path)) === target) return a;
+    }
+  }
+  // 3. 名字一样（Microsoft Store 应用的桌面快捷方式没有程序路径，只能按名字认）
+  const base = path.basename(p).replace(/\.(lnk|url|exe)$/i, '').trim().toLowerCase();
+  return ctx.catalog.find((a) => a.name.trim().toLowerCase() === base) || null;
+}
+
+// 一次添加多个拖进来的东西，返回 { added: [名字], exists: [名字] }
+async function addDropped(paths) {
+  const res = { added: [], exists: [] };
+  for (const p of Array.isArray(paths) ? paths : []) {
+    if (typeof p !== 'string' || !p) continue;
+    const a = findCatalogApp(p);
+    if (a) {
+      if (ctx.state.order.includes(a.key)) res.exists.push(a.name);
+      else { ctx.state.order.push(a.key); res.added.push(a.name); store.saveState(); }
+      continue;
+    }
+    const r = await addPath(p);
+    if (r.status === 'added') res.added.push(r.name);
+    else if (r.status === 'exists') res.exists.push(r.name);
+  }
+  return res;
 }
 
 // 添加网址：只接受 http / https
@@ -98,4 +144,4 @@ function addUrl(url, name) {
   return true;
 }
 
-module.exports = { launch, runAsAdmin, openLocation, targetPath, addPath, addUrl };
+module.exports = { launch, runAsAdmin, openLocation, targetPath, addPath, addDropped, addUrl };

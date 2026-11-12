@@ -95,31 +95,128 @@
   });
   document.addEventListener('dragend', () => { S.dragKey = null; });
 
+  // 悬停高光：把指针在按钮里的位置交给 CSS（每帧最多更新一次）
+  const GLOW = '.btn, .icon-btn, .seg-btn, .mi, .tbtn, .tclose, .tile, .row';
+  let glowEvent = null;
+  document.addEventListener('pointermove', (e) => {
+    if (!glowEvent) requestAnimationFrame(() => {
+      const ev = glowEvent;
+      glowEvent = null;
+      const el = ev.target && ev.target.closest ? ev.target.closest(GLOW) : null;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      el.style.setProperty('--mx', Math.round(ev.clientX - r.left) + 'px');
+      el.style.setProperty('--my', Math.round(ev.clientY - r.top) + 'px');
+    });
+    glowEvent = e;
+  }, { passive: true });
+
   /* ---------- 与主进程同步 ---------- */
 
   api.onMoved((rect) => { S.panelRect = rect; NL.positionBg(); });
 
-  api.onOpen((data, bg, rect) => {
-    S.bg = bg || null;
+  // 显示面板（播放弹出动画）
+  function reveal() {
+    clearTimeout(S.waitTimer);
+    if (S.revealed) return;
+    S.revealed = true;
+    void panel.offsetWidth; // 先让底色在透明状态下变好，显示时不要再播一次渐变
+    document.documentElement.classList.remove('cleared');
+    panel.classList.remove('waiting');
+    panel.classList.remove('pop');
+    void panel.offsetWidth;
+    panel.classList.add('pop');
+    panel.focus({ preventScroll: true });
+  }
+
+  // 打开面板：先渲染好内容但保持透明，等背景截图到了（或等待超时）再显示
+  api.onOpen((data, rect, opts) => {
+    opts = opts || {};
+    // 正在播放关闭动画时又被打开：取消关闭
+    clearTimeout(S.closeTimer);
+    panel.classList.remove('closing');
+    document.documentElement.classList.remove('closing');
+    S.bg = null;
     S.panelRect = rect || null;
+    S.lateBgOk = opts.lateBgOk !== false;
+    S.catalogIcons = null;
     if (data) S.data = data;
-    try { NL.positionBg(); } catch (e) { uiLog('positionBg: ' + (e && e.message)); }
     S.view = 'main';
     S.edit = false;
     S.page = 0;
     S.addSel.clear();
     S.addQuery = '';
     NL.closeMenu();
+    S.revealed = false;
+    panel.classList.add('waiting');
     NL.render();
-    panel.classList.remove('pop');
-    void panel.offsetWidth;
-    panel.classList.add('pop');
-    panel.focus({ preventScroll: true });
-    if (data && Array.isArray(data.notice) && data.notice.length) {
+    clearTimeout(S.waitTimer);
+    S.waitTimer = setTimeout(reveal, Number(opts.maxWait) || 300);
+    if (opts.jumpToEnd) { S.page = NL.pageCount() - 1; NL.render(); }
+    if (opts.toast) NL.showToast({ text: String(opts.toast), ms: 4000 });
+    else if (data && Array.isArray(data.notice) && data.notice.length) {
       const names = data.notice.slice(0, 3).join('、') + (data.notice.length > 3 ? ' 等 ' + data.notice.length + ' 个' : '');
       NL.showToast({ text: '已自动添加新安装的应用：' + names, ms: 5000 });
     }
   });
+
+  // 主进程要收起面板：先变透明并画出来，再告诉主进程可以隐藏窗口了
+  // 收起时先播放关闭动画
+  const CLOSE_MS = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 100 : 170;
+  api.onClear((token) => {
+    clearTimeout(S.waitTimer);
+    clearTimeout(S.closeTimer);
+    NL.closeMenu();
+    const root = document.documentElement;
+    const wasVisible = S.revealed && !root.classList.contains('cleared');
+    S.revealed = false;
+    const finish = () => {
+      root.classList.remove('closing');
+      panel.classList.remove('closing');
+      root.classList.add('cleared');
+      requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => api.cleared(token), 0)));
+    };
+    if (!wasVisible) { finish(); return; }
+    panel.classList.remove('pop');
+    void panel.offsetWidth;
+    panel.classList.add('closing');
+    root.classList.add('closing');
+    S.closeTimer = setTimeout(finish, CLOSE_MS);
+  });
+
+  // 面板开着时，主进程发来的提示（例如把图标拖到「更多应用」上添加成功）
+  api.onToast((text, jumpToEnd) => {
+    if (jumpToEnd && S.view === 'main') { S.page = NL.pageCount() - 1; NL.render(); }
+    NL.showToast({ text: String(text), ms: 4000 });
+  });
+
+  // 背景截图到了
+  api.onBg((bg, rect) => {
+    if (S.revealed && !S.lateBgOk) return; // 老系统上晚到的截图可能拍进了面板自己，不用
+    const late = S.revealed;
+    S.bg = bg || null;
+    if (rect) S.panelRect = rect;
+    try { NL.applyLook(); } catch (e) { uiLog('bg: ' + (e && e.message)); }
+    if (late && S.bg) {
+      const bgEl = document.getElementById('panel-bg');
+      bgEl.classList.remove('fade-in');
+      void bgEl.offsetWidth;
+      bgEl.classList.add('fade-in');
+    }
+    reveal();
+  });
+
+  // 记录卡顿：界面一次忙超过 150ms 就写进日志，方便排查
+  try {
+    let lastLog = 0;
+    new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) {
+        if (e.duration < 150 || Date.now() - lastLog < 5000) continue;
+        lastLog = Date.now();
+        uiLog('long task ' + Math.round(e.duration) + 'ms view=' + S.view + (S.edit ? ' edit' : ''));
+      }
+    }).observe({ entryTypes: ['longtask'] });
+  } catch (_) {}
 
   api.onData((data) => { NL.setData(data); });
 

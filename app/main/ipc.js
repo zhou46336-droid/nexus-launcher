@@ -38,6 +38,7 @@ function register() {
   const st = () => ctx.state;
 
   ipcMain.handle('data:get', () => store.buildData());
+  ipcMain.handle('catalog:get', () => store.catalogView(true));
 
   ipcMain.handle('app:launch', (_e, key) => { actions.launch(str(key)); });
 
@@ -80,9 +81,9 @@ function register() {
   });
 
   ipcMain.handle('app:addPaths', async (_e, paths) => {
-    let n = 0;
-    if (Array.isArray(paths)) for (const p of paths) if (await actions.addPath(p)) n++;
-    return { added: n, data: store.buildData() };
+    ctx.lastDropAt = Date.now();
+    const r = await actions.addDropped(paths);
+    return { added: r.added.length, names: r.added, exists: r.exists, data: store.buildData() };
   });
 
   ipcMain.handle('app:addUrl', (_e, url, name) => {
@@ -92,15 +93,15 @@ function register() {
 
   const pick = async (properties, filters) => {
     ctx.suppressBlur = true;
-    let n = 0;
+    let res = { added: [], exists: [] };
     try {
       const r = await dialog.showOpenDialog(ctx.win, { properties, filters });
-      if (!r.canceled) for (const p of r.filePaths) if (await actions.addPath(p)) n++;
+      if (!r.canceled) res = await actions.addDropped(r.filePaths);
     } finally {
       ctx.suppressBlur = false;
       if (ctx.win && ctx.win.isVisible()) ctx.win.focus();
     }
-    return { added: n, data: store.buildData() };
+    return { added: res.added.length, names: res.added, exists: res.exists, data: store.buildData() };
   };
   ipcMain.handle('app:pickFiles', () => pick(['openFile', 'multiSelections'], [
     { name: '程序或快捷方式', extensions: ['exe', 'lnk', 'url', 'bat', 'cmd'] },
