@@ -75,7 +75,24 @@ svg { display: block; flex-shrink: 0; }
   flex-direction: column;
   padding: 18px 22px 12px;
 }
-#panel.pop { animation: pop 0.16s ease-out; }
+/* 打开：从停靠栏方向轻轻弹上来（略带回弹）；关闭：缩小、下沉、淡出 */
+#panel { transform-origin: 50% 100%; }
+#panel.pop { animation: panel-in 0.34s cubic-bezier(0.2, 0.9, 0.25, 1.12); }
+#panel.closing { animation: panel-out 0.17s cubic-bezier(0.4, 0, 1, 1) forwards; }
+html.closing body { pointer-events: none; }
+html.closing #toast-layer { opacity: 0; transition: opacity 0.12s ease; }
+@keyframes panel-in {
+  0% { opacity: 0; transform: translateY(22px) scale(0.94); }
+  55% { opacity: 1; }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes panel-out {
+  to { opacity: 0; transform: translateY(12px) scale(0.96); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #panel.pop { animation: pop 0.12s ease-out; }
+  #panel.closing { animation-duration: 0.1s; }
+}
 /* 收起前整个界面先变透明（见 window.js 的 hidePanel），重新显示时不会闪旧画面 */
 html.cleared body { opacity: 0; }
 /* 刚打开、还在等背景截图：先不显示（最多等几百毫秒） */

@@ -161,7 +161,7 @@ function notify(text, jumpToEnd) {
   }
 }
 
-/* 收起面板：先让界面变成全透明、画出这一帧，再真正隐藏窗口。
+/* 收起面板：界面先播放关闭动画，变成全透明并画出这一帧，再真正隐藏窗口。
    Windows 重新显示窗口时会先把「上一帧」拿出来显示，
    如果上一帧还是面板的样子，就会先闪一下旧画面再消失。 */
 function hidePanel() {
@@ -170,7 +170,8 @@ function hidePanel() {
   if (!win || !win.isVisible() || pendingHide) return;
   const token = ++hideToken;
   const seq = ++openSeq; // 正在进行的截图作废
-  pendingHide = { token, seq, timer: setTimeout(() => finishHide(token), 150) };
+  // 界面播完关闭动画（约 0.17 秒）后回报；万一没回报，最多等 0.45 秒也会隐藏
+  pendingHide = { token, seq, timer: setTimeout(() => finishHide(token), 450) };
   win.webContents.send('panel:clear', token);
 }
 

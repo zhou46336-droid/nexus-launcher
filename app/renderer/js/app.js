@@ -132,6 +132,10 @@
   // 打开面板：先渲染好内容但保持透明，等背景截图到了（或等待超时）再显示
   api.onOpen((data, rect, opts) => {
     opts = opts || {};
+    // 正在播放关闭动画时又被打开：取消关闭
+    clearTimeout(S.closeTimer);
+    panel.classList.remove('closing');
+    document.documentElement.classList.remove('closing');
     S.bg = null;
     S.panelRect = rect || null;
     S.lateBgOk = opts.lateBgOk !== false;
@@ -157,12 +161,27 @@
   });
 
   // 主进程要收起面板：先变透明并画出来，再告诉主进程可以隐藏窗口了
+  // 收起时先播放关闭动画
+  const CLOSE_MS = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 100 : 170;
   api.onClear((token) => {
     clearTimeout(S.waitTimer);
-    S.revealed = false;
-    document.documentElement.classList.add('cleared');
+    clearTimeout(S.closeTimer);
     NL.closeMenu();
-    requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => api.cleared(token), 0)));
+    const root = document.documentElement;
+    const wasVisible = S.revealed && !root.classList.contains('cleared');
+    S.revealed = false;
+    const finish = () => {
+      root.classList.remove('closing');
+      panel.classList.remove('closing');
+      root.classList.add('cleared');
+      requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => api.cleared(token), 0)));
+    };
+    if (!wasVisible) { finish(); return; }
+    panel.classList.remove('pop');
+    void panel.offsetWidth;
+    panel.classList.add('closing');
+    root.classList.add('closing');
+    S.closeTimer = setTimeout(finish, CLOSE_MS);
   });
 
   // 面板开着时，主进程发来的提示（例如把图标拖到「更多应用」上添加成功）

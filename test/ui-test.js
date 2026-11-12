@@ -159,7 +159,10 @@ async function openPanel(page, extra) {
 
   // 收起前先变透明并回报主进程；再次打开时等背景到了才显示
   await page.evaluate(() => window.__clear(7));
-  await page.waitForTimeout(150);
+  await page.waitForTimeout(60);
+  assert.ok(await page.locator('#panel.closing').count(), 'plays the closing animation');
+  assert.strictEqual(await page.evaluate(() => window.__cleared), undefined, 'waits for the animation before reporting');
+  await page.waitForTimeout(300);
   assert.strictEqual(await page.evaluate(() => document.documentElement.classList.contains('cleared')), true, 'cleared before hiding');
   assert.strictEqual(await page.evaluate(() => window.__cleared), 7, 'reports back after painting the cleared frame');
   await openPanel(page, { panelWidth: 720 });
