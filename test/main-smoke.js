@@ -54,7 +54,9 @@ const fakeElectron = {
     getPath: (n) => { const p = path.join(tmp, n); fs.mkdirSync(p, { recursive: true }); return p; },
     whenReady: () => { readyResolve(); return ready; },
     requestSingleInstanceLock: () => true,
-    on() {}, quit() {}, exit() {}, relaunch() {},
+    handlers: {},
+    on(ev, fn) { this.handlers[ev] = fn; },
+    quit() {}, exit() {}, relaunch() {},
     setLoginItemSettings(o) { this.login = o; },
     getFileIcon: async () => new FakeImage()
   },
@@ -199,6 +201,34 @@ const call = (ch, ...args) => handlers.get(ch)({}, ...args);
   const saved = JSON.parse(fs.readFileSync(path.join(userData, 'state.json'), 'utf8'));
   assert.ok(saved.order.includes('url:https://bilibili.com'));
   assert.strictEqual(saved.iconVersion, require('../app/main/config').ICON_VERSION);
+
+  // 把桌面图标拖到「更多应用」图标上：Windows 带着文件路径再启动一次本程序
+  const dropDir = fs.mkdtempSync(path.join(tmp, 'desktop-'));
+  const mk = (n) => { const p = path.join(dropDir, n); fs.writeFileSync(p, 'x'); return p; };
+  const deltaLnk = mk('Delta.lnk');   // 和已安装的应用同名 → 用扫描到的那个应用
+  const toolExe = mk('tool.exe');     // 不认识的程序 → 作为文件添加
+  const betaLnk = mk('Beta.lnk');     // 已经在启动台里
+  await call('app:remove', 'app:id3');
+  sent.length = 0;
+  const appDir = require('../app/main/config').APP_ROOT;
+  fakeElectron.app.handlers['second-instance']({}, [process.execPath, '--some-switch', deltaLnk, toolExe, betaLnk, path.join(dropDir, 'missing.lnk'), path.join(appDir, 'package.json')]);
+  await new Promise((r) => setTimeout(r, 50));
+  d = await call('data:get');
+  assert.ok(d.items.some((i) => i.key === 'app:id3'), 'dropped shortcut matched to the installed app');
+  const tool = d.items.find((i) => i.name === 'tool');
+  assert.ok(tool && tool.kind === 'file', 'unknown program added as a file');
+  assert.ok(!d.items.some((i) => i.name === 'missing' || i.name === 'package.json'), 'missing files and own files ignored');
+  const opened = sent.find((m) => m[0] === 'panel:open');
+  assert.ok(opened && /已添加 「Delta」、「tool」/.test(opened[3].toast), 'panel opens with a toast: ' + (opened && opened[3].toast));
+  assert.strictEqual(opened[3].jumpToEnd, true);
+  sent.length = 0;
+  fakeElectron.app.handlers['second-instance']({}, [process.execPath, betaLnk]);
+  await new Promise((r) => setTimeout(r, 50));
+  const toast = sent.find((m) => m[0] === 'panel:toast');
+  assert.ok(toast && /「Beta」 已经在启动台里了/.test(toast[1]), 'already-added message while panel is open');
+  const dropRes = await call('app:addPaths', [toolExe]);
+  assert.deepStrictEqual([dropRes.added, dropRes.exists], [0, ['tool']], 'dropping into the panel reports duplicates');
+  panel.hidePanel();
 
   // 卸载清理
   require('../app/main/system').uninstallCleanup();

@@ -147,10 +147,18 @@
     NL.render();
     clearTimeout(S.waitTimer);
     S.waitTimer = setTimeout(reveal, Number(opts.maxWait) || 300);
-    if (data && Array.isArray(data.notice) && data.notice.length) {
+    if (opts.jumpToEnd) { S.page = NL.pageCount() - 1; NL.render(); }
+    if (opts.toast) NL.showToast({ text: String(opts.toast), ms: 4000 });
+    else if (data && Array.isArray(data.notice) && data.notice.length) {
       const names = data.notice.slice(0, 3).join('、') + (data.notice.length > 3 ? ' 等 ' + data.notice.length + ' 个' : '');
       NL.showToast({ text: '已自动添加新安装的应用：' + names, ms: 5000 });
     }
+  });
+
+  // 面板开着时，主进程发来的提示（例如把图标拖到「更多应用」上添加成功）
+  api.onToast((text, jumpToEnd) => {
+    if (jumpToEnd && S.view === 'main') { S.page = NL.pageCount() - 1; NL.render(); }
+    NL.showToast({ text: String(text), ms: 4000 });
   });
 
   // 背景截图到了

@@ -27,5 +27,6 @@ contextBridge.exposeInMainWorld('launcher', {
   getCatalog: () => ipcRenderer.invoke('catalog:get'),
   onOpen: (cb) => ipcRenderer.on('panel:open', (_e, data, rect, opts) => cb(data, rect, opts)),
   onBg: (cb) => ipcRenderer.on('panel:bg', (_e, bg, rect) => cb(bg, rect)),
+  onToast: (cb) => ipcRenderer.on('panel:toast', (_e, text, jumpToEnd) => cb(text, jumpToEnd)),
   onData: (cb) => ipcRenderer.on('data:changed', (_e, data) => cb(data))
 });

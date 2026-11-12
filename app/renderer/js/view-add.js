@@ -71,7 +71,7 @@
     frag.append(list);
     const confirm = h('button', { class: 'btn primary', id: 'add-confirm', onclick: confirmAdd });
     frag.append(h('div', { class: 'foot' },
-      h('span', { class: 'foot-hint' }, svg('upload', 16), h('span', { text: '也可以把 .exe、.lnk 或文件夹直接拖进面板' })),
+      h('span', { class: 'foot-hint' }, svg('upload', 16), h('span', { text: '也可以把桌面图标拖到「更多应用」图标上，或直接拖进面板' })),
       h('div', { class: 'foot-btns' }, h('button', { class: 'btn', onclick: closeAdd }, '取消'), confirm)));
     updateConfirm(confirm);
     return frag;
@@ -82,6 +82,7 @@
       h('div', { class: 'drop-zone' },
         svg('upload', 28),
         h('p', { class: 'dz-title', text: '把 .exe、.lnk 或文件夹拖到这里' }),
+        h('p', { class: 'dz-sub', text: '面板关着时，把桌面图标拖到「更多应用」图标上也能直接添加' }),
         h('p', { class: 'dz-sub', text: '也可以手动选择，支持一次选多个文件' }),
         h('div', { class: 'dz-btns' },
           h('button', { class: 'btn primary', onclick: async () => afterAdd(await api.pickFiles()) }, svg('file', 16), '选择文件…'),
@@ -165,14 +166,16 @@
   function afterAdd(res, failMsg) {
     if (!res) return;
     S.data = res.data;
+    const names = (list) => list.slice(0, 3).map((n) => '「' + n + '」').join('、') + (list.length > 3 ? ' 等 ' + list.length + ' 个' : '');
     if (res.added > 0) {
       S.view = 'main';
       S.page = pageCount() - 1;
       NL.render();
-      showToast({ text: '已添加 ' + res.added + ' 项', ms: 2500 });
+      showToast({ text: Array.isArray(res.names) && res.names.length ? '已添加 ' + names(res.names) : '已添加 ' + res.added + ' 项', ms: 2500 });
     } else {
       NL.render();
-      if (failMsg) showToast({ text: failMsg, ms: 3000 });
+      if (Array.isArray(res.exists) && res.exists.length) showToast({ text: names(res.exists) + ' 已经在启动台里了', ms: 3000 });
+      else if (failMsg) showToast({ text: failMsg, ms: 3000 });
     }
   }
 

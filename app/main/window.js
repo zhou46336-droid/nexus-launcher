@@ -118,7 +118,7 @@ function withTimeout(promise, ms) {
    1. 立刻显示窗口，界面先保持透明（等背景截图，最多等一小会儿），按快捷键马上有反应；
    2. 同时截取面板后方的画面，到了就交给界面做模糊和液态玻璃；
    3. 截图慢或失败时，界面先用不透明一点的底色显示，不会卡在“打不开”。 */
-async function showPanel() {
+async function showPanel(extra) {
   const win = ctx.win;
   if (!win) return;
   const seq = ++openSeq;
@@ -127,10 +127,10 @@ async function showPanel() {
   const data = store.buildData();
   const st = ctx.state;
   if (st.notice.length) { data.notice = st.notice.slice(); st.notice = []; store.saveState(); }
-  win.webContents.send('panel:open', data, panelRect, {
+  win.webContents.send('panel:open', data, panelRect, Object.assign({
     maxWait: CAN_EXCLUDE_FROM_CAPTURE ? 300 : CAPTURE_TIMEOUT_MS,
     lateBgOk: CAN_EXCLUDE_FROM_CAPTURE
-  });
+  }, extra && typeof extra === 'object' && !extra.sender ? { toast: extra.toast, jumpToEnd: !!extra.jumpToEnd } : {}));
   if (CAN_EXCLUDE_FROM_CAPTURE) { try { win.setContentProtection(true); } catch (_) {} }
   win.show();
   win.moveTop();
@@ -141,6 +141,16 @@ async function showPanel() {
   if (ctx.dev) diag('open capture=' + (Date.now() - t0) + 'ms bg=' + (bg ? bg.width + 'x' + bg.height : 'none') + ' scale=' + display.scaleFactor);
   if (seq === openSeq && win.isVisible()) win.webContents.send('panel:bg', bg, panelRect);
   if (Date.now() - ctx.lastScan > config.RESCAN_ON_OPEN_MS) scanner.runScan();
+}
+
+// 面板开着时显示一条提示；关着就打开面板并显示
+function notify(text, jumpToEnd) {
+  if (ctx.win && ctx.win.isVisible()) {
+    store.pushData();
+    ctx.win.webContents.send('panel:toast', text, !!jumpToEnd);
+  } else {
+    showPanel({ toast: text, jumpToEnd });
+  }
 }
 
 function hidePanel() {
@@ -161,4 +171,4 @@ function reposition() {
   ctx.win.webContents.send('panel:moved', panelRect);
 }
 
-module.exports = { createWindow, showPanel, hidePanel, toggle, reposition };
+module.exports = { createWindow, showPanel, hidePanel, toggle, reposition, notify };
