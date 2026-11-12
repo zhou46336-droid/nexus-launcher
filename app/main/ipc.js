@@ -81,6 +81,7 @@ function register() {
   });
 
   ipcMain.handle('app:addPaths', async (_e, paths) => {
+    ctx.lastDropAt = Date.now();
     const r = await actions.addDropped(paths);
     return { added: r.added.length, names: r.added, exists: r.exists, data: store.buildData() };
   });

@@ -14,5 +14,6 @@ module.exports = {
   lastScan: 0,
   quitting: false,
   suppressBlur: false,     // 弹出文件选择框时不要因为失焦而收起面板
-  lastBlurHide: 0
+  lastBlurHide: 0,
+  lastDropAt: 0            // 最近一次有东西拖进面板的时间
 };

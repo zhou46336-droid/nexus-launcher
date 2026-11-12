@@ -40,6 +40,7 @@ class FakeWindow {
   isVisible() { return this.visible; }
   isDestroyed() { return false; }
   setBounds(b) { this.bounds = b; }
+  getBounds() { return this.bounds || { x: 0, y: 0, width: 840, height: 596 }; }
   show() { this.visible = true; }
   hide() { this.visible = false; }
   moveTop() {}
@@ -69,7 +70,8 @@ const fakeElectron = {
     on: (ch, fn) => handlers.set(ch, fn)
   },
   screen: {
-    getCursorScreenPoint: () => ({ x: 10, y: 10 }),
+    cursor: { x: 10, y: 10 },
+    getCursorScreenPoint() { return this.cursor; },
     getDisplayNearestPoint: () => ({ id: 1, scaleFactor: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 }, workArea: { x: 0, y: 0, width: 1920, height: 1040 } })
   },
   nativeImage: { createFromPath: () => new FakeImage(), createFromBitmap: () => new FakeImage() },
@@ -229,6 +231,59 @@ const call = (ch, ...args) => handlers.get(ch)({}, ...args);
   const dropRes = await call('app:addPaths', [toolExe]);
   assert.deepStrictEqual([dropRes.added, dropRes.exists], [0, ['tool']], 'dropping into the panel reports duplicates');
   panel.hidePanel();
+
+  // 点击面板外面收起 / 从桌面拖东西进来时不收起（用假的小助手模拟鼠标事件）
+  const { EventEmitter } = require('events');
+  const autohide = require('../app/main/autohide');
+  let helper = null;
+  autohide._setHelper(() => {
+    helper = new EventEmitter();
+    helper.stdout = new EventEmitter();
+    helper.stdout.setEncoding = () => {};
+    helper.stdin = { end() {} };
+    helper.kill = () => {};
+    helper.say = (...lines) => helper.stdout.emit('data', lines.join('\n') + '\n');
+    return helper;
+  }, true);
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const blurOpen = async () => { await panel.showPanel(); ctx.win.events.blur(); };
+
+  await blurOpen();                       // 普通点击别处：按下很快松开 → 收起
+  helper.say('init down 5 5');
+  helper.say('up 5 5');
+  assert.ok(!ctx.win.isVisible(), 'click outside hides the panel');
+
+  await blurOpen();                       // 键盘切走（Alt+Tab）→ 立刻收起
+  helper.say('init up 5 5');
+  assert.ok(!ctx.win.isVisible(), 'keyboard switch hides the panel');
+
+  await blurOpen();                       // 从桌面拖到面板里放下 → 保持打开
+  helper.say('init down 5 5', 'move');
+  await wait(50);
+  assert.ok(ctx.win.isVisible(), 'panel stays open while dragging');
+  await call('app:addPaths', [toolExe]);  // 界面报告「放进来了」
+  helper.say('up 400 300');
+  await wait(450);
+  assert.ok(ctx.win.isVisible(), 'panel stays open after a drop');
+  assert.strictEqual(autohide._mode(), 'stay');
+  fakeElectron.screen.cursor = { x: 700, y: 500 };   // 在面板里面点：不收起
+  helper.say('down 700 500');
+  assert.ok(ctx.win.isVisible(), 'click inside keeps it open');
+  fakeElectron.screen.cursor = { x: 5, y: 5 };       // 点到外面：收起
+  helper.say('down 5 5');
+  assert.ok(!ctx.win.isVisible(), 'next outside click hides it');
+
+  await blurOpen();                       // 拖到别处松手（没放进面板）→ 收起
+  helper.say('init down 5 5');
+  await wait(250);                        // 按住超过 0.2 秒 = 拖动
+  assert.ok(ctx.win.isVisible(), 'long press does not hide immediately');
+  helper.say('up 9 9');
+  await wait(450);
+  assert.ok(!ctx.win.isVisible(), 'dropping elsewhere hides it');
+
+  autohide._setHelper(() => { throw new Error('no helper'); }, false);
+  await blurOpen();                       // 没有小助手：退回原来的做法
+  assert.ok(!ctx.win.isVisible(), 'falls back to hide on blur without the helper');
 
   // 卸载清理
   require('../app/main/system').uninstallCleanup();

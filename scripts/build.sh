@@ -15,6 +15,10 @@ if [ ! -f "$RUNTIME/NexusLauncher.exe" ]; then
   exit 1
 fi
 
+echo "== 编译鼠标状态小助手（拖动时不收起面板用）"
+(cd "$ROOT/native" && GOOS=windows GOARCH=amd64 CGO_ENABLED=0 GOFLAGS=-mod=mod \
+  go build -trimpath -ldflags "-H windowsgui -s -w" -o "$ROOT/app/bin/mousewatch.exe" ./mousewatch)
+
 echo "== 组装程序目录（v$VER）"
 rm -rf "$APPDIR"
 mkdir -p "$APPDIR" "$DIST"

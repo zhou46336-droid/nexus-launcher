@@ -7,6 +7,7 @@ const ctx = require('./context');
 const config = require('./config');
 const store = require('./store');
 const scanner = require('./scanner');
+const autohide = require('./autohide');
 const { diag } = require('./log');
 
 let currentDisplay = null;
@@ -57,11 +58,13 @@ function createWindow() {
   win.webContents.on('render-process-gone', (_e, d) => diag('render gone: ' + (d && d.reason)));
   win.webContents.on('unresponsive', () => diag('unresponsive'));
   win.webContents.on('did-fail-load', (_e, code, desc) => diag('load failed: ' + code + ' ' + desc));
+  // 点到面板外面就收起（从桌面往面板里拖东西时除外，见 autohide.js）
+  autohide.init(hidePanel);
   win.on('blur', () => {
     if (ctx.suppressBlur || !win.isVisible()) return;
-    ctx.lastBlurHide = Date.now();
-    hidePanel();
+    autohide.onBlur();
   });
+  win.on('focus', () => autohide.stop());
   win.on('close', (e) => {
     if (!ctx.quitting) { e.preventDefault(); hidePanel(); }
   });
@@ -154,6 +157,7 @@ function notify(text, jumpToEnd) {
 }
 
 function hidePanel() {
+  autohide.stop();
   if (!ctx.win || !ctx.win.isVisible()) return;
   ctx.win.hide();
 }

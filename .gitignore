@@ -3,6 +3,7 @@ build/
 dist/
 installer/cmd/setup/payload.zip
 installer/cmd/*/rsrc_windows_amd64.syso
+app/bin/
 
 # 测试输出
 test/out/

@@ -11,6 +11,7 @@
      icons.js        图标兜底、统一大小、生成 ICO
      export-icon.js  导出高清图标（给 Nexus 用）
      window.js       启动台窗口
+     autohide.js     点击面板外面自动收起（从桌面拖东西过来时不收起）
      actions.js      打开应用、添加文件 / 网址
      system.js       托盘、快捷键、开机自启、快捷方式
      ipc.js          界面可以调用的接口
