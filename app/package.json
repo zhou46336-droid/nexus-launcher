@@ -1,7 +1,7 @@
 {
   "name": "nexus-launcher",
   "productName": "NexusLauncher",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "更多应用：给 Nexus 等停靠栏用的应用启动台（Alt+Q 打开）",
   "main": "main/index.js",
   "license": "MIT",
