@@ -118,9 +118,9 @@ function withTimeout(promise, ms) {
 }
 
 /* 打开面板：
-   1. 立刻显示窗口，界面先保持透明（等背景截图，最多等一小会儿），按快捷键马上有反应；
-   2. 同时截取面板后方的画面，到了就交给界面做模糊和液态玻璃；
-   3. 截图慢或失败时，界面先用不透明一点的底色显示，不会卡在“打不开”。 */
+   1. 立刻显示窗口，界面先保持透明，等背景截图；
+   2. 同时截取面板后方的画面，到了就交给界面做模糊和液态玻璃，面板这时才弹出来；
+   3. 截图卡住（超过 1.5 秒）或失败时，界面改用不透明一点的底色显示，不会卡在“打不开”。 */
 async function showPanel(extra) {
   const win = ctx.win;
   if (!win) return;
@@ -131,7 +131,8 @@ async function showPanel(extra) {
   const st = ctx.state;
   if (st.notice.length) { data.notice = st.notice.slice(); st.notice = []; store.saveState(); }
   win.webContents.send('panel:open', data, panelRect, Object.assign({
-    maxWait: CAN_EXCLUDE_FROM_CAPTURE ? 300 : CAPTURE_TIMEOUT_MS,
+    // 等背景截图到了再显示，避免先闪一下深色底（截图一般 0.3~0.5 秒）；截图卡住时最多等 1.5 秒
+    maxWait: CAPTURE_TIMEOUT_MS,
     lateBgOk: CAN_EXCLUDE_FROM_CAPTURE
   }, extra && typeof extra === 'object' && !extra.sender ? { toast: extra.toast, jumpToEnd: !!extra.jumpToEnd } : {}));
   if (CAN_EXCLUDE_FROM_CAPTURE) { try { win.setContentProtection(true); } catch (_) {} }
