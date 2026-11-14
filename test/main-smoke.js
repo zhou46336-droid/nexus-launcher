@@ -26,7 +26,10 @@ class FakeImage {
   toDataURL() { return ''; }
 }
 class FakeWebContents {
-  constructor() { this.listeners = {}; }
+  constructor() {
+    this.listeners = {};
+    this.session = { setDisplayMediaRequestHandler: (fn) => { this.displayMediaHandler = fn; } };
+  }
   on(ev, fn) { this.listeners[ev] = fn; }
   once(ev, fn) { this.listeners[ev] = fn; }
   send(...args) {
@@ -49,6 +52,7 @@ class FakeWindow {
   hide() { this.visible = false; }
   moveTop() {}
   focus() {}
+  setContentProtection(v) { this.protected = v; }
 }
 class FakeTray { setToolTip() {} on() {} setContextMenu(m) { this.menu = m; } }
 
@@ -169,7 +173,19 @@ const call = (ch, ...args) => handlers.get(ch)({}, ...args);
   assert.strictEqual(d.settings.accent, '#7CC7FF', 'bad colors ignored');
   d = await call('settings:set', 'glassStrength', 'abc');
   assert.strictEqual(d.settings.glassStrength, 0);
+  // 背景渲染方式：只认 static / live；这台机器（测试环境）不支持实时渲染时不给捕获源
+  assert.strictEqual(d.settings.bgMode, 'static', 'static background by default');
+  assert.strictEqual(typeof d.settings.liveSupported, 'boolean');
+  assert.strictEqual(d.settings.liveFps, 60);
+  d = await call('settings:set', 'bgMode', 'live');
+  assert.strictEqual(d.settings.bgMode, 'live');
+  assert.strictEqual(await call('capture:source'), null, 'no live capture where windows cannot be excluded from capture');
+  d = await call('settings:set', 'bgMode', 'weird');
+  assert.strictEqual(d.settings.bgMode, 'static', 'unknown modes fall back to static');
+  await call('settings:set', 'bgMode', 'live');
+  assert.ok(typeof ctx.win.webContents.displayMediaHandler === 'function', 'screen capture requests are answered by the main process');
   d = await call('settings:set', 'reset', true);
+  assert.strictEqual(d.settings.bgMode, 'static', 'reset goes back to static');
   assert.strictEqual(d.settings.blur, 14);
   assert.strictEqual(d.settings.panelWidth, 800);
 

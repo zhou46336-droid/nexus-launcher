@@ -59,7 +59,17 @@ svg { display: block; flex-shrink: 0; }
   background-repeat: no-repeat;
   filter: blur(var(--blur, 0px));
   pointer-events: none;
+  overflow: hidden;
 }
+/* 实时渲染：屏幕画面的视频盖在静态截图上，第一帧到了再淡入 */
+.live-bg {
+  position: absolute;
+  object-fit: fill;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+.live-bg.on { opacity: 1; }
 #panel-tint {
   position: absolute;
   inset: 0;
@@ -626,6 +636,7 @@ input[type="search"]::-webkit-search-cancel-button { filter: invert(1); opacity:
   align-items: center;
   gap: 16px;
   min-height: 56px;
+  flex: none;
   padding: 8px 16px;
   box-sizing: border-box;
   border-radius: var(--r-row);
@@ -636,6 +647,10 @@ input[type="search"]::-webkit-search-cancel-button { filter: invert(1); opacity:
 .set-note { font-size: 12px; color: var(--muted); }
 .set-val { font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
 .set-ctl { display: flex; align-items: center; }
+.set-row.has-hint { row-gap: 6px; padding-bottom: 12px; }
+.set-hint { grid-column: 1 / -1; margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.seg-btn:disabled { opacity: 0.4; cursor: default; background: transparent !important; }
+.seg-btn:disabled::before { display: none; }
 .set-row input[type="range"] { width: 100%; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .swatches { display: flex; gap: 10px; }
 .swatch { width: 26px; height: 26px; padding: 0; border: 0; border-radius: var(--pill); cursor: pointer; }

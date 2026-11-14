@@ -48,6 +48,22 @@ async function openPanel(page, extra) {
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   await page.addInitScript(MOCK);
+  // 测试页里没有真的屏幕可捕获：用一段不停变色的画布视频冒充「实时屏幕画面」
+  await page.addInitScript(() => {
+    if (!navigator.mediaDevices) Object.defineProperty(navigator, 'mediaDevices', { value: {} });
+    window.__gum = [];
+    navigator.mediaDevices.getUserMedia = async (c) => {
+      window.__gum.push(c);
+      const cv = document.createElement('canvas');
+      cv.width = 800; cv.height = 450;
+      const g = cv.getContext('2d');
+      let t = 0;
+      (function draw() { g.fillStyle = 'hsl(' + (t++ * 3 % 360) + ' 70% 50%)'; g.fillRect(0, 0, 800, 450); requestAnimationFrame(draw); })();
+      const s = cv.captureStream(60);
+      window.__liveStreams = (window.__liveStreams || []).concat(s);
+      return s;
+    };
+  });
   await page.goto(PAGE);
   // 测试页没有真的桌面，给页面一个深色背景，截图好看一点
   await page.addStyleTag({ content: 'html, body { background: #101522 !important; }' });
@@ -109,13 +125,33 @@ async function openPanel(page, extra) {
 
   // 5. 外观设置
   await page.click('text=外观');
-  assert.strictEqual(await page.locator('.set-row').count(), 6);
+  assert.strictEqual(await page.locator('.set-row').count(), 7);
   await page.locator('.switch').click();
   assert.strictEqual(await page.locator('.switch').getAttribute('aria-checked'), 'false');
   assert.doesNotMatch(await page.locator('#panel-bg').evaluate((el) => el.style.filter), /url\("?#lg"?\)/, 'glass can be turned off');
   await page.locator('.switch').click();
   await shot('settings');
   await docShot('settings');
+
+  // 5b. 背景渲染：切到实时渲染 → 屏幕画面视频淡入、出现提示；切回静态 → 停止捕获
+  assert.strictEqual(await page.locator('.set-hint').count(), 0, 'no hint in static mode');
+  await page.click('.seg-btn >> text=实时渲染');
+  await page.waitForSelector('#panel-bg video.live-bg.on', { timeout: 3000 });
+  const gum = await page.evaluate(() => window.__gum[0]);
+  assert.strictEqual(gum.video.mandatory.chromeMediaSourceId, 'screen:0:0');
+  assert.strictEqual(gum.video.mandatory.maxWidth, 800, 'half resolution');
+  assert.strictEqual(gum.video.mandatory.maxFrameRate, 60);
+  assert.ok(await page.locator('.set-hint').isVisible(), 'hint about screenshots in live mode');
+  assert.match(await page.locator('.set-row', { hasText: '背景渲染' }).locator('.set-val').innerText(), /60 帧/);
+  const vbox = await page.locator('.live-bg').evaluate((v) => [v.style.left, v.style.top, v.style.width, v.style.height]);
+  assert.deepStrictEqual(vbox.slice(2), ['1600px', '900px'], 'video covers the whole screen like the screenshot');
+  await page.locator('.settings').evaluate((el) => { el.scrollTop = el.scrollHeight; });
+  await shot('settings-live');
+  await page.click('.seg-btn >> text=静态截图');
+  await page.waitForTimeout(100);
+  assert.strictEqual(await page.locator('.live-bg').count(), 0, 'live video removed in static mode');
+  assert.ok(await page.evaluate(() => window.__liveStreams.every((s) => s.getTracks().every((t) => t.readyState === 'ended'))), 'capture stopped');
+
   await page.keyboard.press('Escape');
   await page.click('text=完成');
 
@@ -167,6 +203,16 @@ async function openPanel(page, extra) {
   assert.strictEqual(await page.evaluate(() => window.__cleared), 7, 'reports back after painting the cleared frame');
   await openPanel(page, { panelWidth: 720 });
   assert.strictEqual(await page.evaluate(() => document.documentElement.classList.contains('cleared')), false, 'visible again after reopening');
+
+  // 实时模式：打开后先用截图，实时画面到了再淡入；收起时停止捕获
+  await openPanel(page, { bgMode: 'live' });
+  await page.waitForSelector('#panel-bg video.live-bg.on', { timeout: 3000 });
+  await page.evaluate(() => window.__clear(8));
+  await page.waitForTimeout(350);
+  assert.strictEqual(await page.evaluate(() => window.__cleared), 8);
+  assert.strictEqual(await page.locator('.live-bg').count(), 0, 'live capture stops when the panel is hidden');
+  assert.ok(await page.evaluate(() => window.__liveStreams.every((s) => s.getTracks().every((t) => t.readyState === 'ended'))), 'all capture tracks stopped');
+  await openPanel(page, { panelWidth: 720 });
 
   // 10. Esc 收起面板
   await page.keyboard.press('Escape');

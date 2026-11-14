@@ -42,6 +42,8 @@
       uiLog('glass: ' + (e && e.message));
       panelBg.style.filter = 'blur(' + blur + 'px)';
     }
+    // 背景渲染方式可能变了：开始或停止实时画面
+    if (NL.live) NL.live.sync();
   }
 
   /* ---------- 折射曲线 ---------- */
@@ -169,6 +171,7 @@
     panelBg.style.height = (hh + M * 2) + 'px';
     panelBg.style.backgroundSize = bg.width + 'px ' + bg.height + 'px';
     panelBg.style.backgroundPosition = (bg.x - r.x + M) + 'px ' + (bg.y - r.y + M) + 'px';
+    if (NL.live) NL.live.position(M);
     updateGlassMap();
   }
 

@@ -2,7 +2,6 @@
 
 // 启动台窗口：透明无边框、始终置顶，显示在停靠栏上方居中
 const { BrowserWindow, screen, desktopCapturer, ipcMain } = require('electron');
-const os = require('os');
 const ctx = require('./context');
 const config = require('./config');
 const store = require('./store');
@@ -15,9 +14,7 @@ let openSeq = 0;           // 每次打开面板的编号：晚到的截图只�
 let hideToken = 0;
 let pendingHide = null;    // 正在收起：等界面把自己变透明
 
-// Windows 10 2004（内部版本 19041）起可以把窗口排除在截图之外，
-// 这样面板可以先显示出来，再同时去截它后面的画面
-const CAN_EXCLUDE_FROM_CAPTURE = process.platform === 'win32' && Number(String(os.release()).split('.')[2] || 0) >= 19041;
+const CAN_EXCLUDE_FROM_CAPTURE = config.CAN_EXCLUDE_FROM_CAPTURE;
 // 截图最多等这么久；偶尔系统截图接口卡住时，不能让面板跟着打不开
 const CAPTURE_TIMEOUT_MS = 1500;
 
@@ -67,6 +64,10 @@ function createWindow() {
     autohide.onBlur();
   });
   win.on('focus', () => autohide.stop());
+  // 实时渲染的备用方式（getDisplayMedia）：直接给面板所在的屏幕，不弹选择框
+  win.webContents.session.setDisplayMediaRequestHandler((_req, callback) => {
+    screenSource().then((src) => callback(src ? { video: src } : {})).catch(() => callback({}));
+  });
   ipcMain.on('panel:cleared', (_e, token) => finishHide(token));
   win.on('close', (e) => {
     if (!ctx.quitting) { e.preventDefault(); hidePanel(); }
@@ -145,7 +146,8 @@ async function showPanel(extra) {
   win.focus();
 
   const bg = await withTimeout(captureBehind(display), CAPTURE_TIMEOUT_MS);
-  if (CAN_EXCLUDE_FROM_CAPTURE && seq === openSeq) { try { win.setContentProtection(false); } catch (_) {} }
+  // 实时渲染时面板开着就一直排除在录屏之外，否则截完图就恢复
+  if (CAN_EXCLUDE_FROM_CAPTURE && seq === openSeq && !liveMode()) { try { win.setContentProtection(false); } catch (_) {} }
   if (ctx.dev) diag('open capture=' + (Date.now() - t0) + 'ms bg=' + (bg ? bg.width + 'x' + bg.height : 'none') + ' scale=' + display.scaleFactor);
   if (seq === openSeq && win.isVisible()) win.webContents.send('panel:bg', bg, panelRect);
   if (Date.now() - ctx.lastScan > config.RESCAN_ON_OPEN_MS) scanner.runScan();
@@ -180,7 +182,34 @@ function finishHide(token) {
   if (!p || p.token !== token) return;
   pendingHide = null;
   clearTimeout(p.timer);
-  if (openSeq === p.seq && ctx.win && ctx.win.isVisible()) ctx.win.hide();
+  if (openSeq === p.seq && ctx.win && ctx.win.isVisible()) {
+    ctx.win.hide();
+    if (CAN_EXCLUDE_FROM_CAPTURE) { try { ctx.win.setContentProtection(false); } catch (_) {} }
+  }
+}
+
+/* ---------- 实时渲染 ---------- */
+
+function liveMode() {
+  return CAN_EXCLUDE_FROM_CAPTURE && ctx.state && ctx.state.settings.bgMode === 'live';
+}
+
+// 设置里切换了背景渲染方式：面板开着时立刻调整「排除在录屏之外」
+function applyBgMode() {
+  if (!CAN_EXCLUDE_FROM_CAPTURE || !isShown()) return;
+  try { ctx.win.setContentProtection(liveMode()); } catch (_) {}
+}
+
+// 面板所在屏幕的捕获源（只要编号，不生成缩略图，很快）
+async function screenSource() {
+  const display = currentDisplay || screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 }, fetchWindowIcons: false });
+  return sources.find((s) => s.display_id && String(s.display_id) === String(display.id)) || sources[0] || null;
+}
+
+async function captureSourceId() {
+  if (!liveMode()) return null;
+  try { const src = await screenSource(); return src ? { id: src.id } : null; } catch (_) { return null; }
 }
 
 // 面板是否处于打开状态（正在收起的不算）
@@ -201,4 +230,4 @@ function reposition() {
   ctx.win.webContents.send('panel:moved', panelRect);
 }
 
-module.exports = { createWindow, showPanel, hidePanel, toggle, reposition, notify, isShown };
+module.exports = { createWindow, showPanel, hidePanel, toggle, reposition, notify, isShown, applyBgMode, captureSourceId };

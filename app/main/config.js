@@ -2,6 +2,7 @@
 
 // 固定配置：尺寸、默认设置、文件位置
 const path = require('path');
+const os = require('os');
 
 const APP_ROOT = path.join(__dirname, '..');
 
@@ -12,11 +13,16 @@ const PAD = 20;
 
 const DEFAULT_LOOK = {
   blur: 14, panelAlpha: 0.6, panelWidth: 800, bottomOffset: 180,
-  accent: '#7CC7FF', glass: true, glassStrength: 40
+  accent: '#7CC7FF', glass: true, glassStrength: 40,
+  bgMode: 'static'          // 背景渲染：static 打开时截一张图；live 面板开着时实时捕获后面的画面
 };
 
 module.exports = {
   APP_ROOT,
+  // Windows 10 2004（内部版本 19041）起可以把窗口排除在截图 / 录屏之外：
+  // 静态截图时面板可以先显示；实时渲染靠它避免把面板自己录进去
+  CAN_EXCLUDE_FROM_CAPTURE: process.platform === 'win32' && Number(String(os.release()).split('.')[2] || 0) >= 19041,
+  LIVE_FPS: 60,
   APP_NAME: 'NexusLauncher',
   AUMID: 'NexusLauncher.MoreApps',
   SHORTCUT_NAME: '更多应用.lnk',

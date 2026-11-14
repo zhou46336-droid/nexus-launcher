@@ -52,6 +52,16 @@ function trayMenu() {
       submenu: alphas.map(([label, a]) => ({ label, type: 'radio', checked: s.panelAlpha === a, click: setting('panelAlpha', a) }))
     },
     {
+      label: '背景渲染',
+      submenu: [
+        { label: '静态截图（省电）', type: 'radio', checked: s.bgMode !== 'live', click: () => { s.bgMode = 'static'; panel.applyBgMode(); store.saveState(); store.pushData(); } },
+        {
+          label: '实时渲染（动态壁纸）', type: 'radio', checked: s.bgMode === 'live', enabled: config.CAN_EXCLUDE_FROM_CAPTURE,
+          click: () => { s.bgMode = 'live'; panel.applyBgMode(); store.saveState(); store.pushData(); }
+        }
+      ]
+    },
+    {
       label: '自动添加新安装的应用', type: 'checkbox', checked: !!s.autoAdd,
       click: (mi) => { s.autoAdd = mi.checked; store.saveState(); }
     },

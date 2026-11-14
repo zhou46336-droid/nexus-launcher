@@ -136,6 +136,9 @@ function buildData() {
       accent: s.accent,
       glass: s.glass !== false,
       glassStrength: s.glassStrength,
+      bgMode: s.bgMode === 'live' ? 'live' : 'static',
+      liveSupported: config.CAN_EXCLUDE_FROM_CAPTURE,
+      liveFps: config.LIVE_FPS,
       cols: columns()
     }
   };

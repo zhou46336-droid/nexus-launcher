@@ -136,6 +136,7 @@
     clearTimeout(S.closeTimer);
     panel.classList.remove('closing');
     document.documentElement.classList.remove('closing');
+    NL.live.reset();
     S.bg = null;
     S.panelRect = rect || null;
     S.lateBgOk = opts.lateBgOk !== false;
@@ -171,6 +172,7 @@
     const wasVisible = S.revealed && !root.classList.contains('cleared');
     S.revealed = false;
     const finish = () => {
+      NL.live.stop();
       root.classList.remove('closing');
       panel.classList.remove('closing');
       root.classList.add('cleared');
@@ -204,6 +206,8 @@
       bgEl.classList.add('fade-in');
     }
     reveal();
+    // 实时渲染：静态截图先垫底，实时画面准备好后淡入
+    NL.live.sync();
   });
 
   // 记录卡顿：界面一次忙超过 150ms 就写进日志，方便排查

@@ -26,7 +26,8 @@ function setSetting(key, value) {
     case 'accent': if (/^#[0-9a-f]{6}$/i.test(str(value))) s.accent = str(value); break;
     case 'glass': s.glass = !!value; break;
     case 'glassStrength': s.glassStrength = Math.round(num(value, 0, 60)); break;
-    case 'reset': Object.assign(s, config.DEFAULT_LOOK); break;
+    case 'bgMode': s.bgMode = value === 'live' ? 'live' : 'static'; panel.applyBgMode(); break;
+    case 'reset': Object.assign(s, config.DEFAULT_LOOK); panel.applyBgMode(); break;
     default: return;
   }
   store.saveState();
@@ -39,6 +40,8 @@ function register() {
 
   ipcMain.handle('data:get', () => store.buildData());
   ipcMain.handle('catalog:get', () => store.catalogView(true));
+  // 实时渲染：面板所在屏幕的捕获源
+  ipcMain.handle('capture:source', () => panel.captureSourceId());
 
   ipcMain.handle('app:launch', (_e, key) => { actions.launch(str(key)); });
 

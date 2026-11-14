@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('launcher', {
   setSetting: (key, value) => ipcRenderer.invoke('settings:set', key, value),
   onMoved: (cb) => ipcRenderer.on('panel:moved', (_e, rect) => cb(rect)),
   getCatalog: () => ipcRenderer.invoke('catalog:get'),
+  captureSource: () => ipcRenderer.invoke('capture:source'),
   onOpen: (cb) => ipcRenderer.on('panel:open', (_e, data, rect, opts) => cb(data, rect, opts)),
   onBg: (cb) => ipcRenderer.on('panel:bg', (_e, bg, rect) => cb(bg, rect)),
   onToast: (cb) => ipcRenderer.on('panel:toast', (_e, text, jumpToEnd) => cb(text, jumpToEnd)),

@@ -84,6 +84,34 @@
     return row('面板宽度', '窄的每行 7 个', h('div', { class: 'set-ctl' }, widths), h('span', { class: 'set-val', text: st.panelWidth + ' px' }));
   }
 
+  // 背景渲染：静态截图（打开时截一张）/ 实时渲染（动态壁纸、视频也能实时透过玻璃）
+  function bgModeRow() {
+    const st = S.data.settings;
+    const live = st.bgMode === 'live' && st.liveSupported;
+    const seg = h('div', { class: 'seg', role: 'group', 'aria-label': '背景渲染' });
+    for (const [label, v] of [['静态截图', 'static'], ['实时渲染', 'live']]) {
+      const on = (v === 'live') === live;
+      const off = v === 'live' && !st.liveSupported;
+      seg.append(h('button', {
+        class: 'seg-btn' + (on ? ' on' : ''),
+        'aria-pressed': on ? 'true' : 'false',
+        disabled: off,
+        title: off ? '需要 Windows 10 2004 或更高版本' : null,
+        onclick: () => { if (!on) sendSetting('bgMode', v, true); }
+      }, label));
+    }
+    const r = row('背景渲染', live ? '动态壁纸也能实时透过玻璃' : '适合静态壁纸，最省电',
+      h('div', { class: 'set-ctl' }, seg), h('span', { class: 'set-val', text: live ? (st.liveFps || 60) + ' 帧' : '' }));
+    if (live) {
+      r.classList.add('has-hint');
+      r.append(h('p', {
+        class: 'set-hint',
+        text: '实时模式下，面板开着时截图和录屏软件拍不到面板（为了避免画面套娃），需要截图时切回静态即可。'
+      }));
+    }
+    return r;
+  }
+
   function accentRow() {
     const st = S.data.settings;
     const sw = h('div', { class: 'swatches', role: 'group', 'aria-label': '强调色' });
@@ -110,6 +138,7 @@
     body.append(rangeRow('面板深浅', 'panelAlpha', 0.2, 0.9, 0.01, (v) => Math.round(Number(v) * 100) + '%', '越深字越清楚'));
     body.append(rangeRow('离屏幕底部', 'bottomOffset', 60, 400, 10, (v) => v + ' px', '面板的高度位置'));
     body.append(glassRow());
+    body.append(bgModeRow());
     body.append(widthRow());
     body.append(accentRow());
     frag.append(body);
