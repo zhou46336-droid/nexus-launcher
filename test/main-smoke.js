@@ -98,6 +98,9 @@ Module._resolveFilename = function (request, ...rest) {
 };
 require.cache.electron = { id: 'electron', filename: 'electron', loaded: true, exports: fakeElectron };
 
+// 测试里不真的调用 PowerShell：在 Windows 上开机扫描会真的跑起来，又慢结果又不固定
+require('../app/main/powershell').run = async () => ({ stdout: '', stderr: '', error: '测试中不调用 PowerShell' });
+
 // 先放一份扫描结果，模拟已经扫描过的电脑
 const userData = fakeElectron.app.getPath('userData');
 const catalog = ['Alpha', 'Beta', 'Gamma', 'Delta'].map((n, i) => ({ key: 'app:id' + i, name: n, appId: 'id' + i, path: 'C:\\Apps\\' + n + '.lnk', icon: null }));
@@ -309,7 +312,7 @@ const call = (ch, ...args) => handlers.get(ch)({}, ...args);
   require('../app/main/system').uninstallCleanup();
   assert.strictEqual(fakeElectron.app.login.openAtLogin, false);
 
-  // 扫描（Linux 上没有 PowerShell，应该安静地失败，不影响现有数据）
+  // 扫描（测试里 PowerShell 被替换成直接失败，应该安静地结束，不影响现有数据）
   await require('../app/main/scanner').runScan();
   assert.strictEqual(ctx.scanning, false);
   assert.strictEqual(ctx.catalog.length, 4);

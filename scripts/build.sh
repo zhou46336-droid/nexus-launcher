@@ -2,7 +2,7 @@
 # 打包「更多应用」：
 #   build/NexusLauncher/                    可以直接运行的程序目录
 #   dist/NexusLauncher-Setup-<版本>.exe     单文件安装程序（离线、不需要管理员权限）
-# 需要：Python 3、Go 1.21+；先运行 scripts/fetch-electron.sh 准备运行时（或用 RUNTIME=目录 指定）
+# 需要：Python 3、Go 1.24+；先运行 scripts/fetch-electron.sh 准备运行时（或用 RUNTIME=目录 指定）
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 RUNTIME=${RUNTIME:-$ROOT/build/runtime}
