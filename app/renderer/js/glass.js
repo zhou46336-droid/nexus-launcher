@@ -28,14 +28,17 @@
     const showBg = hasBg && (blur > 0 || glass);
     panelBg.style.display = showBg ? 'block' : 'none';
     panel.classList.toggle('no-bg', !showBg && blur > 0);
+    // 有玻璃背景时，底色在边缘一圈变淡，让折射透出来（见 style.css 的 .lg-on）
+    panel.classList.toggle('lg-on', glass && showBg);
     try {
-      const sc = (Number(st.glassStrength) || 0) * 0.9;
+      // feDisplacementMap 的最大偏移是 scale 的一半；系数 2.0 → 强度拉满时边缘约偏移 60px
+      const sc = (Number(st.glassStrength) || 0) * 2.0;
       lgR.setAttribute('scale', sc.toFixed(1));
-      lgG.setAttribute('scale', (sc * 0.95).toFixed(1));
-      lgB.setAttribute('scale', (sc * 0.9).toFixed(1));
+      lgG.setAttribute('scale', (sc * 0.92).toFixed(1));
+      lgB.setAttribute('scale', (sc * 0.84).toFixed(1));
       // 玻璃会让背后的颜色更鲜一点
       panelBg.style.filter = glass && hasBg
-        ? 'blur(' + blur + 'px) url(#lg) saturate(1.45) brightness(1.04)'
+        ? 'blur(' + blur + 'px) url(#lg) saturate(1.6) brightness(1.06)'
         : 'blur(' + blur + 'px)';
       positionBg();
     } catch (e) {
@@ -48,7 +51,7 @@
 
   /* ---------- 折射曲线 ---------- */
 
-  const BEZEL = 30;      // 玻璃“厚边”的宽度（px）
+  const BEZEL = 46;      // 玻璃“厚边”的宽度（px），越宽折射带越明显
   const LUT_N = 128;
   const refractLut = (() => {
     const n = 1.5, H = BEZEL, base = 6;

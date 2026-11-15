@@ -110,6 +110,17 @@ html.cleared body { opacity: 0; }
 /* 背景截图还没到或失败时，底色加深，保证字看得清 */
 #panel:not(.waiting) #panel-tint { transition: background-color 0.2s ease; }
 #panel.no-bg #panel-tint { background: rgb(14 18 30 / max(var(--alpha), 0.82)); }
+/* 液态玻璃：底色在边缘 46px（和玻璃厚边一样宽）里逐渐变淡，折射出来的背景更清楚；中间深浅不变，字照样清楚 */
+#panel.lg-on #panel-tint {
+  -webkit-mask-image:
+    linear-gradient(to right, rgb(0 0 0 / 0.5), #000 46px, #000 calc(100% - 46px), rgb(0 0 0 / 0.5)),
+    linear-gradient(to bottom, rgb(0 0 0 / 0.5), #000 46px, #000 calc(100% - 46px), rgb(0 0 0 / 0.5));
+  mask-image:
+    linear-gradient(to right, rgb(0 0 0 / 0.5), #000 46px, #000 calc(100% - 46px), rgb(0 0 0 / 0.5)),
+    linear-gradient(to bottom, rgb(0 0 0 / 0.5), #000 46px, #000 calc(100% - 46px), rgb(0 0 0 / 0.5));
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
 /* 截图晚到时，背景淡入 */
 #panel-bg.fade-in { animation: bg-in 0.22s ease-out; }
 @keyframes bg-in { from { opacity: 0; } to { opacity: 1; } }
