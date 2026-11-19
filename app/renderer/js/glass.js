@@ -22,8 +22,18 @@
     const glass = st.glass !== false;
     panel.style.setProperty('--alpha', String(typeof st.panelAlpha === 'number' ? st.panelAlpha : 0.6));
     panel.style.setProperty('--blur', blur + 'px');
-    if (st.accent) document.documentElement.style.setProperty('--accent', st.accent);
+    // 配色方案：主色 / 次要色 / 第三色 / 主色按钮上的文字
+    const scheme = (st.schemes || []).find((x) => x.id === st.scheme);
+    if (scheme) {
+      const root = document.documentElement.style;
+      root.setProperty('--accent', scheme.primary);
+      root.setProperty('--accent-2', scheme.secondary);
+      root.setProperty('--accent-3', scheme.tertiary);
+      root.setProperty('--on-accent', scheme.onPrimary);
+    }
     panel.classList.toggle('glass', glass);
+    // 文字光晕：字边缘一圈向外渐淡的黑色，透明度高时也看得清
+    panel.classList.toggle('text-halo', st.textHalo !== false);
     const hasBg = !!(S.bg && S.bg.url);
     const showBg = hasBg && (blur > 0 || glass);
     panelBg.style.display = showBg ? 'block' : 'none';

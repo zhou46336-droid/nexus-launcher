@@ -23,10 +23,12 @@ function setSetting(key, value) {
     case 'panelAlpha': s.panelAlpha = Math.round(num(value, 0.1, 0.95) * 100) / 100; break;
     case 'panelWidth': s.panelWidth = config.PANEL_WIDTHS.includes(Number(value)) ? Number(value) : 800; break;
     case 'bottomOffset': s.bottomOffset = Math.round(num(value, 0, 600)); break;
-    case 'accent': if (/^#[0-9a-f]{6}$/i.test(str(value))) s.accent = str(value); break;
+    case 'scheme': if (config.SCHEME_IDS.includes(str(value))) s.scheme = str(value); break;
     case 'glass': s.glass = !!value; break;
+    case 'textHalo': s.textHalo = !!value; break;
     case 'glassStrength': s.glassStrength = Math.round(num(value, 0, 60)); break;
     case 'bgMode': s.bgMode = value === 'live' ? 'live' : 'static'; panel.applyBgMode(); break;
+    case 'liveFps': s.liveFps = config.LIVE_FPS_CHOICES.includes(Number(value)) ? Number(value) : 60; break;
     case 'reset': Object.assign(s, config.DEFAULT_LOOK); panel.applyBgMode(); break;
     default: return;
   }
@@ -85,8 +87,8 @@ function register() {
 
   ipcMain.handle('app:addPaths', async (_e, paths) => {
     ctx.lastDropAt = Date.now();
-    const r = await actions.addDropped(paths);
-    return { added: r.added.length, names: r.added, exists: r.exists, data: store.buildData() };
+    const r = await actions.addDropped(paths, { cleanDesktop: st().settings.cleanDesktop !== false });
+    return { added: r.added.length, names: r.added, exists: r.exists, removed: r.removed, keptOnDesktop: r.keptOnDesktop, data: store.buildData() };
   });
 
   ipcMain.handle('app:addUrl', (_e, url, name) => {

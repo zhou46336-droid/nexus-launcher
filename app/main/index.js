@@ -54,11 +54,13 @@ function listNames(names) {
 }
 
 async function addDroppedOnIcon(files) {
-  const r = await actions.addDropped(files);
+  const r = await actions.addDropped(files, { cleanDesktop: ctx.state.settings.cleanDesktop !== false });
   let text;
   if (r.added.length) text = '已添加 ' + listNames(r.added);
   else if (r.exists.length) text = listNames(r.exists) + ' 已经在启动台里了';
   else text = '没有添加：没认出这个文件';
+  if (r.removed.length) text += '，桌面上的快捷方式已移到回收站';
+  if (r.keptOnDesktop.length) text += '（桌面上的 ' + listNames(r.keptOnDesktop) + ' 没能删掉）';
   log('dropped on icon: ' + files.length + ' file(s), added ' + r.added.length);
   panel.notify(text, r.added.length > 0);
 }

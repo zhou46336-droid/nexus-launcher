@@ -4,7 +4,6 @@
 (function (NL) {
   const { api, S, h, svg } = NL;
 
-  const ACCENTS = [['天蓝', '#7CC7FF'], ['薰衣草', '#A5B4FF'], ['薄荷', '#7EE0C3'], ['橙', '#FFB86B'], ['樱粉', '#FF9EC0'], ['白', '#E8ECF3']];
 
   function openSettings() { NL.closeMenu(); S.view = 'settings'; NL.render(); }
   function closeSettings() { S.view = 'main'; NL.render(); }
@@ -71,6 +70,25 @@
     return row('液态玻璃', '边缘真实折射，无描边', h('div', { class: 'set-ctl with-switch' }, gSwitch, gRange), gVal);
   }
 
+  // 文字光晕：字边缘一圈向外渐淡的黑色（样式见 style.css 的 .text-halo）
+  function textHaloRow() {
+    const on = S.data.settings.textHalo !== false;
+    const val = h('span', { class: 'set-val', text: on ? '开启' : '关闭' });
+    const sw = h('button', {
+      class: 'switch', role: 'switch', 'aria-checked': on ? 'true' : 'false', 'aria-label': '文字光晕',
+      onclick: () => {
+        const next = S.data.settings.textHalo === false;
+        S.data.settings.textHalo = next;
+        sw.setAttribute('aria-checked', next ? 'true' : 'false');
+        val.textContent = next ? '开启' : '关闭';
+        NL.applyLook();
+        sendSetting('textHalo', next, false);
+      }
+    });
+    return row('文字光晕', '字边缘加一圈渐淡的黑色', h('div', { class: 'set-ctl' }, sw), val);
+  }
+
+
   function widthRow() {
     const st = S.data.settings;
     const widths = h('div', { class: 'seg', role: 'group', 'aria-label': '面板宽度' });
@@ -100,30 +118,49 @@
         onclick: () => { if (!on) sendSetting('bgMode', v, true); }
       }, label));
     }
+    // 实时模式下可以选刷新率：帧数越高，背景跟得越紧，也越费显卡
+    let fpsSeg = null;
+    if (live) {
+      fpsSeg = h('div', { class: 'seg', role: 'group', 'aria-label': '实时渲染刷新率' });
+      for (const f of st.liveFpsChoices || [30, 60, 120]) {
+        const on = f === (st.liveFps || 60);
+        fpsSeg.append(h('button', {
+          class: 'seg-btn' + (on ? ' on' : ''),
+          'aria-pressed': on ? 'true' : 'false',
+          title: f > 60 ? '显示器要 120Hz 或更高才有效果' : null,
+          onclick: () => { if (!on) sendSetting('liveFps', f, true); }
+        }, String(f)));
+      }
+    }
     const r = row('背景渲染', live ? '动态壁纸也能实时透过玻璃' : '适合静态壁纸，最省电',
-      h('div', { class: 'set-ctl' }, seg), h('span', { class: 'set-val', text: live ? (st.liveFps || 60) + ' 帧' : '' }));
+      h('div', { class: 'set-ctl with-switch' }, seg, fpsSeg), h('span', { class: 'set-val', text: live ? (st.liveFps || 60) + ' 帧' : '' }));
     if (live) {
       r.classList.add('has-hint');
       r.append(h('p', {
         class: 'set-hint',
-        text: '实时模式下，面板开着时截图和录屏软件拍不到面板（为了避免画面套娃），需要截图时切回静态即可。'
+        text: '数字是刷新率（帧/秒），越高越流畅也越费电。实时模式下，面板开着时截图和录屏软件拍不到面板（为了避免画面套娃），需要截图时切回静态即可。'
       }));
     }
     return r;
   }
 
-  function accentRow() {
+  // 配色方案：仿 Android「壁纸与风格」的拼色圆，上半主色、左下次要色、右下第三色
+  function schemeRow() {
     const st = S.data.settings;
-    const sw = h('div', { class: 'swatches', role: 'group', 'aria-label': '强调色' });
-    for (const [label, c] of ACCENTS) {
+    const sw = h('div', { class: 'swatches', role: 'group', 'aria-label': '配色' });
+    let current = '';
+    for (const sc of st.schemes || []) {
+      const on = sc.id === st.scheme;
+      if (on) current = sc.name;
+      const [top, left, right] = sc.swatch;
       sw.append(h('button', {
-        class: 'swatch' + ((st.accent || '').toLowerCase() === c.toLowerCase() ? ' on' : ''),
-        style: 'background:' + c,
-        'aria-label': label, title: label,
-        onclick: () => { S.data.settings.accent = c; NL.applyLook(); sendSetting('accent', c, true); }
+        class: 'swatch' + (on ? ' on' : ''),
+        style: 'background: linear-gradient(' + top + ' 50%, transparent 50%), linear-gradient(to right, ' + left + ' 50%, ' + right + ' 50%)',
+        'aria-label': sc.name, 'aria-pressed': on ? 'true' : 'false', title: sc.name,
+        onclick: () => { if (!on) { S.data.settings.scheme = sc.id; NL.applyLook(); sendSetting('scheme', sc.id, true); } }
       }));
     }
-    return row('强调色', '按钮和选中状态的颜色', h('div', { class: 'set-ctl' }, sw), h('span', { class: 'set-val' }));
+    return row('配色', '仿 Android 的拼色主题', h('div', { class: 'set-ctl' }, sw), h('span', { class: 'set-val', text: current }));
   }
 
   function renderSettings() {
@@ -138,9 +175,10 @@
     body.append(rangeRow('面板深浅', 'panelAlpha', 0.2, 0.9, 0.01, (v) => Math.round(Number(v) * 100) + '%', '越深字越清楚'));
     body.append(rangeRow('离屏幕底部', 'bottomOffset', 60, 400, 10, (v) => v + ' px', '面板的高度位置'));
     body.append(glassRow());
+    body.append(textHaloRow());
     body.append(bgModeRow());
     body.append(widthRow());
-    body.append(accentRow());
+    body.append(schemeRow());
     frag.append(body);
     return frag;
   }

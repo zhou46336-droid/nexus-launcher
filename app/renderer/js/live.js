@@ -1,7 +1,7 @@
 'use strict';
 
 /* 实时渲染背景（外观设置里的「背景渲染 → 实时渲染」）
-   面板开着时持续捕获它后面的屏幕画面（一半分辨率、60 帧），放进背景层，
+   面板开着时持续捕获它后面的屏幕画面（一半分辨率，帧数在外观设置里选：30 / 60 / 120），放进背景层，
    套上和静态截图一样的模糊和液态玻璃效果；动态壁纸、视频、移动的窗口都会实时透过玻璃。
    面板本身已被主进程排除在录屏之外，不会出现「画中画」。
    打开时先显示静态截图，实时画面第一帧到了再淡入；捕获失败就一直用静态截图。
@@ -17,6 +17,9 @@
   let failed = false;      // 这次打开面板已经失败过，不反复重试
   let loggedOnce = false;
   let lastMargin = 0;
+  let streamFps = 0;       // 当前捕获用的帧数；设置里改了帧数就重新捕获
+
+  const wantedFps = () => Number((S.data.settings || {}).liveFps) || 60;
 
   function wanted() {
     const st = S.data.settings || {};
@@ -92,13 +95,14 @@
     starting = true;
     const my = ++token;
     try {
-      const fps = Number((S.data.settings || {}).liveFps) || 60;
+      const fps = wantedFps();
       // 一半分辨率：反正要模糊，看不出差别，捕获和滤镜的开销都小很多
       const width = Math.max(320, Math.round(S.bg.width / 2));
       const height = Math.max(200, Math.round(S.bg.height / 2));
       const s = await openStream(width, height, fps);
       if (my !== token || !wanted()) { s.getTracks().forEach((t) => t.stop()); return; }
       stream = s;
+      streamFps = fps;
       const v = document.createElement('video');
       v.className = 'live-bg';
       v.muted = true;
@@ -136,8 +140,11 @@
 
   // 根据当前设置和面板状态，开始或停止实时渲染
   function sync() {
-    if (wanted()) start();
-    else {
+    if (wanted()) {
+      // 改了刷新率：停掉旧的捕获，按新帧数重新开始（中间短暂显示静态截图）
+      if (stream && streamFps !== wantedFps()) stop();
+      start();
+    } else {
       stop();
       // 切回静态后再切到实时，允许重新试一次
       if ((S.data.settings || {}).bgMode !== 'live') failed = false;

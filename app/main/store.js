@@ -43,6 +43,12 @@ function loadState() {
   };
   // 旧版本默认离底部 120，升级后默认改高到 180
   if ((s.settingsVersion || 1) < 2 && ctx.state.settings.bottomOffset === 120) ctx.state.settings.bottomOffset = 180;
+  // v3：单一「强调色」换成「配色方案」，旧颜色换成最接近的一套
+  const set = ctx.state.settings;
+  if ((s.settingsVersion || 1) < 3 && isObj(s.settings) && typeof s.settings.accent === 'string') {
+    set.scheme = config.OLD_ACCENT_TO_SCHEME[s.settings.accent.toLowerCase()] || 'blue';
+  }
+  delete set.accent;
 
   const cached = loadJSON(ctx.paths.catalogPath, null);
   if (Array.isArray(cached)) setCatalog(cached);
@@ -133,12 +139,15 @@ function buildData() {
       blur: s.blur,
       panelWidth: panelWidth(),
       bottomOffset: s.bottomOffset,
-      accent: s.accent,
+      scheme: config.SCHEME_IDS.includes(s.scheme) ? s.scheme : 'blue',
+      schemes: config.SCHEMES,
       glass: s.glass !== false,
+      textHalo: s.textHalo !== false,
       glassStrength: s.glassStrength,
       bgMode: s.bgMode === 'live' ? 'live' : 'static',
       liveSupported: config.CAN_EXCLUDE_FROM_CAPTURE,
-      liveFps: config.LIVE_FPS,
+      liveFps: config.LIVE_FPS_CHOICES.includes(Number(s.liveFps)) ? Number(s.liveFps) : 60,
+      liveFpsChoices: config.LIVE_FPS_CHOICES,
       cols: columns()
     }
   };

@@ -167,14 +167,18 @@
     if (!res) return;
     S.data = res.data;
     const names = (list) => list.slice(0, 3).map((n) => '「' + n + '」').join('、') + (list.length > 3 ? ' 等 ' + list.length + ' 个' : '');
+    // 拖进来的是桌面快捷方式：说明桌面上那个的去向
+    let desk = '';
+    if (Array.isArray(res.removed) && res.removed.length) desk += '，桌面上的快捷方式已移到回收站';
+    if (Array.isArray(res.keptOnDesktop) && res.keptOnDesktop.length) desk += '（桌面上的 ' + names(res.keptOnDesktop) + ' 没能删掉）';
     if (res.added > 0) {
       S.view = 'main';
       S.page = pageCount() - 1;
       NL.render();
-      showToast({ text: Array.isArray(res.names) && res.names.length ? '已添加 ' + names(res.names) : '已添加 ' + res.added + ' 项', ms: 2500 });
+      showToast({ text: (Array.isArray(res.names) && res.names.length ? '已添加 ' + names(res.names) : '已添加 ' + res.added + ' 项') + desk, ms: desk ? 4000 : 2500 });
     } else {
       NL.render();
-      if (Array.isArray(res.exists) && res.exists.length) showToast({ text: names(res.exists) + ' 已经在启动台里了', ms: 3000 });
+      if (Array.isArray(res.exists) && res.exists.length) showToast({ text: names(res.exists) + ' 已经在启动台里了' + desk, ms: desk ? 4000 : 3000 });
       else if (failMsg) showToast({ text: failMsg, ms: 3000 });
     }
   }

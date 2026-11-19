@@ -172,14 +172,33 @@ const call = (ch, ...args) => handlers.get(ch)({}, ...args);
   assert.strictEqual(d.settings.panelWidth, 800);
   d = await call('settings:set', 'panelWidth', 720);
   assert.strictEqual(d.settings.cols, 7);
-  d = await call('settings:set', 'accent', 'red; background:url(x)');
-  assert.strictEqual(d.settings.accent, '#7CC7FF', 'bad colors ignored');
+  // 配色方案：默认谷歌蓝；只认已有的方案名，乱写的值不生效
+  assert.strictEqual(d.settings.scheme, 'blue', 'Google blue by default');
+  assert.strictEqual(d.settings.schemes.length, 8);
+  assert.ok(d.settings.schemes.every((x) => /^#[0-9A-F]{6}$/.test(x.primary) && /^#[0-9A-F]{6}$/.test(x.onPrimary) && x.swatch.length === 3), 'every scheme has its colors');
+  d = await call('settings:set', 'scheme', 'green');
+  assert.strictEqual(d.settings.scheme, 'green');
+  d = await call('settings:set', 'scheme', 'red; background:url(x)');
+  assert.strictEqual(d.settings.scheme, 'green', 'unknown schemes ignored');
+  assert.strictEqual(d.settings.accent, undefined, 'old accent setting is gone');
+  // 文字光晕：默认开，布尔值
+  assert.strictEqual(d.settings.textHalo, true, 'text halo on by default');
+  d = await call('settings:set', 'textHalo', 'yes');
+  assert.strictEqual(d.settings.textHalo, true, 'anything truthy turns it on');
+  d = await call('settings:set', 'textHalo', false);
+  assert.strictEqual(d.settings.textHalo, false);
   d = await call('settings:set', 'glassStrength', 'abc');
   assert.strictEqual(d.settings.glassStrength, 0);
   // 背景渲染方式：只认 static / live；这台机器（测试环境）不支持实时渲染时不给捕获源
   assert.strictEqual(d.settings.bgMode, 'static', 'static background by default');
   assert.strictEqual(typeof d.settings.liveSupported, 'boolean');
   assert.strictEqual(d.settings.liveFps, 60);
+  // 实时渲染刷新率：只认 30 / 60 / 120，其它值退回 60
+  d = await call('settings:set', 'liveFps', 120);
+  assert.strictEqual(d.settings.liveFps, 120);
+  d = await call('settings:set', 'liveFps', 999);
+  assert.strictEqual(d.settings.liveFps, 60, 'unknown fps falls back to 60');
+  d = await call('settings:set', 'liveFps', 30);
   d = await call('settings:set', 'bgMode', 'live');
   assert.strictEqual(d.settings.bgMode, 'live');
   assert.strictEqual(await call('capture:source'), null, 'no live capture where windows cannot be excluded from capture');
@@ -189,6 +208,9 @@ const call = (ch, ...args) => handlers.get(ch)({}, ...args);
   assert.ok(typeof ctx.win.webContents.displayMediaHandler === 'function', 'screen capture requests are answered by the main process');
   d = await call('settings:set', 'reset', true);
   assert.strictEqual(d.settings.bgMode, 'static', 'reset goes back to static');
+  assert.strictEqual(d.settings.liveFps, 60, 'reset goes back to 60 fps');
+  assert.strictEqual(d.settings.scheme, 'blue', 'reset goes back to Google blue');
+  assert.strictEqual(d.settings.textHalo, true, 'reset turns text halo back on');
   assert.strictEqual(d.settings.blur, 14);
   assert.strictEqual(d.settings.panelWidth, 800);
 
@@ -253,6 +275,51 @@ const call = (ch, ...args) => handlers.get(ch)({}, ...args);
   assert.ok(toast && /「Beta」 已经在启动台里了/.test(toast[1]), 'already-added message while panel is open');
   const dropRes = await call('app:addPaths', [toolExe]);
   assert.deepStrictEqual([dropRes.added, dropRes.exists], [0, ['tool']], 'dropping into the panel reports duplicates');
+  assert.deepStrictEqual(dropRes.removed, [], 'files outside the desktop are never removed');
+
+  // 拖进来的是桌面上的快捷方式：加进启动台后移到回收站，启动台自己留一份副本
+  const trashed = [];
+  fakeElectron.shell.trashItem = async (p) => { trashed.push(p); fs.rmSync(p); };
+  const desk = fakeElectron.app.getPath('desktop');
+  const onDesk = (n) => { const p = path.join(desk, n); fs.writeFileSync(p, 'shortcut ' + n); return p; };
+  const gammaLnk = onDesk('Gamma Tool.lnk');
+  const rawExe = onDesk('raw.exe');
+  const deltaOnDesk = onDesk('Delta.lnk');   // 对应已安装的应用（已经在启动台里）
+  let cd = await call('app:addPaths', [gammaLnk, rawExe, deltaOnDesk]);
+  assert.deepStrictEqual(trashed, [gammaLnk, deltaOnDesk], 'only desktop shortcuts go to the recycle bin, programs stay');
+  const ownLnk = onDesk(require('../app/main/config').SHORTCUT_NAME);
+  await call('app:addPaths', [ownLnk]);
+  assert.ok(fs.existsSync(ownLnk), 'our own 更多应用 shortcut is never removed');
+  assert.deepStrictEqual(cd.removed, ['Gamma Tool', 'Delta']);
+  assert.ok(fs.existsSync(rawExe), 'a program on the desktop is never removed');
+  const gamma = ctx.state.custom['file:' + gammaLnk.toLowerCase()];
+  assert.ok(gamma && gamma.target.startsWith(path.join(userData, 'shortcuts')), 'launcher keeps its own copy: ' + (gamma && gamma.target));
+  assert.strictEqual(fs.readFileSync(gamma.target, 'utf8'), 'shortcut Gamma Tool.lnk', 'the copy has the same content');
+  // 托盘菜单里的开关，关掉后不再删
+  const trayItem = ctx.tray.menu.template.find((m) => m.label === '拖进来后删掉桌面快捷方式');
+  assert.ok(trayItem && trayItem.type === 'checkbox' && trayItem.checked, 'tray menu has the switch, on by default');
+  trayItem.click({ checked: false });
+  assert.strictEqual(ctx.state.settings.cleanDesktop, false);
+  const keepLnk = onDesk('Keep Me.lnk');
+  cd = await call('app:addPaths', [keepLnk]);
+  assert.strictEqual(cd.added, 1);
+  assert.ok(fs.existsSync(keepLnk) && cd.removed.length === 0, 'switched off: the desktop shortcut stays');
+  trayItem.click({ checked: true });
+  // 删不掉（比如公共桌面没有权限）：照样添加，并说明没删掉
+  fakeElectron.shell.trashItem = async () => { throw new Error('access denied'); };
+  const lockedLnk = onDesk('Locked.lnk');
+  cd = await call('app:addPaths', [lockedLnk]);
+  assert.deepStrictEqual([cd.added, cd.removed, cd.keptOnDesktop], [1, [], ['Locked']], 'failure is reported, the app is still added');
+  // 拖到「更多应用」图标上也一样
+  fakeElectron.shell.trashItem = async (p) => { trashed.push(p); fs.rmSync(p); };
+  const iconLnk = onDesk('Icon Drop.lnk');
+  sent.length = 0;
+  fakeElectron.app.handlers['second-instance']({}, [process.execPath, iconLnk]);
+  await new Promise((r) => setTimeout(r, 50));
+  assert.ok(!fs.existsSync(iconLnk), 'dropping on the dock icon also cleans the desktop');
+  const iconMsg = sent.find((m) => m[0] === 'panel:toast' || m[0] === 'panel:open');
+  const iconText = iconMsg && (iconMsg[0] === 'panel:toast' ? iconMsg[1] : iconMsg[3].toast);
+  assert.ok(/已移到回收站/.test(iconText || ''), 'message mentions the recycle bin: ' + iconText);
   panel.hidePanel();
 
   // 点击面板外面收起 / 从桌面拖东西进来时不收起（用假的小助手模拟鼠标事件）

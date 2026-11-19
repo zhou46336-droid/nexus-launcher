@@ -9,6 +9,8 @@ const ctx = require('./context');
 const store = require('./store');
 const icons = require('./icons');
 const panel = require('./window');
+const { log } = require('./log');
+const config = require('./config');
 
 function openAppsFolder(appId) {
   spawn('explorer.exe', ['shell:AppsFolder\\' + appId], { detached: true, stdio: 'ignore' }).unref();
@@ -67,7 +69,7 @@ async function addPath(p) {
   const isDir = st.isDirectory();
   const key = (isDir ? 'dir:' : 'file:') + p.toLowerCase();
   const name = path.basename(p).replace(/\.(lnk|url|exe|bat|cmd)$/i, '') || p;
-  if (ctx.state.order.includes(key)) return { status: 'exists', name: (ctx.state.custom[key] || {}).name || name };
+  if (ctx.state.order.includes(key)) return { status: 'exists', name: (ctx.state.custom[key] || {}).name || name, key };
   let icon = null;
   let iconScale = null;
   try {
@@ -79,7 +81,7 @@ async function addPath(p) {
   ctx.state.custom[key] = { name, kind: isDir ? 'folder' : 'file', target: p, icon, iconScale };
   ctx.state.order.push(key);
   store.saveState();
-  return { status: 'added', name };
+  return { status: 'added', name, key };
 }
 
 /* 拖进来的如果就是某个已安装的应用（桌面快捷方式、程序本身），直接用扫描到的那个应用：
@@ -109,20 +111,77 @@ function findCatalogApp(p) {
   return ctx.catalog.find((a) => a.name.trim().toLowerCase() === base) || null;
 }
 
-// 一次添加多个拖进来的东西，返回 { added: [名字], exists: [名字] }
-async function addDropped(paths) {
-  const res = { added: [], exists: [] };
+/* ---------- 拖进来后清理桌面 ----------
+   拖进来的是桌面上的快捷方式（.lnk / .url）时，加进启动台后把桌面上那个移到回收站。
+   只动桌面上的快捷方式本身：程序、文件夹、其它文件一概不碰；进的是回收站，随时能找回。 */
+const SHORTCUT_RE = /\.(lnk|url)$/i;
+
+function desktopDirs() {
+  const dirs = [app.getPath('desktop')];
+  if (process.env.PUBLIC) dirs.push(path.join(process.env.PUBLIC, 'Desktop'));   // 所有用户共用的桌面
+  return dirs.map(norm);
+}
+
+function isDesktopShortcut(p) {
+  if (!SHORTCUT_RE.test(p) || !desktopDirs().includes(norm(path.dirname(p)))) return false;
+  // 「更多应用」自己的快捷方式不删（停靠栏、桌面都靠它打开启动台）
+  return path.basename(p).toLowerCase() !== config.SHORTCUT_NAME.toLowerCase();
+}
+
+// 启动台自己留一份快捷方式（放在 userData\shortcuts 里），桌面上那份删了照样能打开
+function keepCopy(p) {
+  const dir = path.join(app.getPath('userData'), 'shortcuts');
+  fs.mkdirSync(dir, { recursive: true });
+  const ext = path.extname(p);
+  const base = path.basename(p, ext);
+  let dest = path.join(dir, base + ext);
+  for (let i = 2; fs.existsSync(dest); i++) dest = path.join(dir, base + ' (' + i + ')' + ext);
+  fs.copyFileSync(p, dest);
+  return dest;
+}
+
+async function removeFromDesktop(p, key) {
+  const c = ctx.state.custom[key];
+  if (c && norm(c.target) === norm(p)) {
+    c.target = keepCopy(p);   // 复制失败会抛错，桌面上的就不删
+    store.saveState();
+  }
+  await shell.trashItem(p);
+}
+
+// 一次添加多个拖进来的东西
+// opts.cleanDesktop：把已经在启动台里的桌面快捷方式移到回收站
+// 返回 { added: [名字], exists: [名字], removed: [移到回收站的], keptOnDesktop: [没删掉的] }
+async function addDropped(paths, opts = {}) {
+  const res = { added: [], exists: [], removed: [], keptOnDesktop: [] };
   for (const p of Array.isArray(paths) ? paths : []) {
     if (typeof p !== 'string' || !p) continue;
+    let key;
+    let name;
     const a = findCatalogApp(p);
     if (a) {
+      key = a.key;
+      name = a.name;
       if (ctx.state.order.includes(a.key)) res.exists.push(a.name);
       else { ctx.state.order.push(a.key); res.added.push(a.name); store.saveState(); }
-      continue;
+    } else {
+      const r = await addPath(p);
+      if (r.status === 'added') res.added.push(r.name);
+      else if (r.status === 'exists') res.exists.push(r.name);
+      else continue;
+      key = r.key;
+      name = r.name;
     }
-    const r = await addPath(p);
-    if (r.status === 'added') res.added.push(r.name);
-    else if (r.status === 'exists') res.exists.push(r.name);
+    if (opts.cleanDesktop && isDesktopShortcut(p)) {
+      try {
+        await removeFromDesktop(p, key);
+        res.removed.push(name);
+      } catch (e) {
+        // 常见原因：所有用户共用的桌面需要管理员权限
+        res.keptOnDesktop.push(name);
+        log('desktop shortcut not removed: ' + p + ' (' + (e && e.message) + ')');
+      }
+    }
   }
   return res;
 }

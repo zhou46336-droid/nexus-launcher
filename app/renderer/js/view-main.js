@@ -50,7 +50,8 @@
         onclick: refresh
       }, svg('refresh', 16)),
       S.edit ? h('button', { class: 'btn', onclick: NL.openSettings }, svg('sliders', 16), '外观') : null,
-      h('button', { class: 'btn', onclick: NL.openAdd }, svg('plus', 16), '添加应用'),
+      // 主界面最主要的操作用主色实心按钮；编辑模式里让给「完成」
+      h('button', { class: S.edit ? 'btn' : 'btn primary', onclick: NL.openAdd }, svg('plus', 16), '添加应用'),
       S.edit
         ? h('button', { class: 'btn primary', onclick: () => setEdit(false) }, '完成')
         : h('button', { class: 'btn', onclick: () => setEdit(true) }, svg('edit', 16), '编辑'));
@@ -210,16 +211,71 @@
     setData(await api.move(src, dst));
   }
 
+  /* ---------- 移除动画 ----------
+     被删的图标先缩小淡出，删完重画后，其余图标从旧位置滑到新位置（FLIP 做法：
+     先记下旧位置，重画后用 transform 把它们“放回”旧位置，再动画归零）。 */
+
+  const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function gridRects() {
+    const m = new Map();
+    for (const el of content.querySelectorAll('.grid .tile[data-key]')) m.set(el.dataset.key, el.getBoundingClientRect());
+    return m;
+  }
+
+  function animateOut(els) {
+    if (!els.length) return Promise.resolve();
+    const reduce = reduceMotion();
+    const jobs = els.map((el) => {
+      el.style.pointerEvents = 'none';
+      const a = el.animate(reduce
+        ? [{ opacity: 1 }, { opacity: 0 }]
+        : [{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(0.4)' }],
+      { duration: reduce ? 120 : 220, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' });
+      return a.finished.catch(() => {});
+    });
+    // 万一动画没触发结束（比如元素已被移出页面），最多等 300ms
+    return Promise.race([Promise.all(jobs), wait(300)]);
+  }
+
+  function slideIn(before) {
+    if (reduceMotion()) return;
+    for (const el of content.querySelectorAll('.grid .tile[data-key]')) {
+      const old = before.get(el.dataset.key);
+      if (!old) {
+        // 从下一页补上来的图标：淡入
+        el.animate([{ opacity: 0, transform: 'scale(0.8)' }, { opacity: 1, transform: 'scale(1)' }],
+          { duration: 240, easing: 'ease-out' });
+        continue;
+      }
+      const now = el.getBoundingClientRect();
+      const dx = old.left - now.left, dy = old.top - now.top;
+      if (!dx && !dy) continue;
+      el.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px)' }, { transform: 'none' }],
+        { duration: 280, easing: 'cubic-bezier(0.2, 0.9, 0.25, 1)' });
+    }
+  }
+
   async function removeItem(key) {
     const it = S.data.items.find((i) => i.key === key);
-    if (!it) return;
+    if (!it || S.removing) return;   // 上一个还在动画中，先不接新的
     closeMenu();
-    const index = await api.remove(key);
-    S.data.items = S.data.items.filter((i) => i.key !== key);
-    S.data.recent = S.data.recent.filter((k) => k !== key);
-    S.data.frequent = S.data.frequent.filter((k) => k !== key);
-    for (const c of S.data.catalog) if (c.key === key) c.added = false;
-    setData();
+    S.removing = true;
+    let index;
+    try {
+      const els = [...content.querySelectorAll('.tile[data-key="' + CSS.escape(key) + '"]')];
+      const before = gridRects();
+      [index] = await Promise.all([api.remove(key), animateOut(els)]);
+      S.data.items = S.data.items.filter((i) => i.key !== key);
+      S.data.recent = S.data.recent.filter((k) => k !== key);
+      S.data.frequent = S.data.frequent.filter((k) => k !== key);
+      for (const c of S.data.catalog) if (c.key === key) c.added = false;
+      setData();
+      slideIn(before);
+    } finally {
+      S.removing = false;
+    }
     showToast({ item: it, text: '已从启动台移除「' + it.name + '」', undo: { key, index }, ms: 5000 });
   }
 

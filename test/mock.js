@@ -22,7 +22,7 @@
     const used = Object.keys(usage).filter(k => shown.has(k));
     const recent = used.slice().sort((a, b) => usage[b].last - usage[a].last).slice(0, 8);
     const freq = pinned.concat(used.filter(k => !pinned.includes(k)).sort((a, b) => usage[b].count - usage[a].count)).slice(0, 8);
-    return { items, recent, frequent: freq, catalog: catalog.map(c => Object.assign({}, c, { icon: null, added: shown.has(c.key) })), loading: false, settings: Object.assign({ hotkey: 'Alt+Q', panelAlpha: 0.6, blur: window.__blur || 14, panelWidth: window.__w || 800, bottomOffset: 180, accent: '#7CC7FF', glass: true, glassStrength: 30, bgMode: 'static', liveSupported: true, liveFps: 60, cols: (window.__w || 800) < 780 ? 7 : 8 }, window.__set || {}) };
+    return { items, recent, frequent: freq, catalog: catalog.map(c => Object.assign({}, c, { icon: null, added: shown.has(c.key) })), loading: false, settings: Object.assign({ hotkey: 'Alt+Q', panelAlpha: 0.6, blur: window.__blur || 14, panelWidth: window.__w || 800, bottomOffset: 180, scheme: 'blue', schemes: [{ id: 'blue', name: '谷歌蓝', primary: '#A8C7FA', secondary: '#BAC7E0', tertiary: '#E8B8DD', onPrimary: '#062E6F', swatch: ['#A8C7FA', '#465368', '#CB9DC1'] }, { id: 'green', name: '谷歌绿', primary: '#6DD58C', secondary: '#B4CDB9', tertiary: '#81D3DD', onPrimary: '#073A1A', swatch: ['#6DD58C', '#425747', '#65B8C2'] }], glass: true, glassStrength: 30, textHalo: true, bgMode: 'static', liveSupported: true, liveFps: 60, cols: (window.__w || 800) < 780 ? 7 : 8 }, window.__set || {}) };
   }
   window.__mock = { data, setOrder: (o) => { order = o; } };
   window.launcher = {

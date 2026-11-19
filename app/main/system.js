@@ -66,6 +66,10 @@ function trayMenu() {
       click: (mi) => { s.autoAdd = mi.checked; store.saveState(); }
     },
     {
+      label: '拖进来后删掉桌面快捷方式', type: 'checkbox', checked: s.cleanDesktop !== false,
+      click: (mi) => { s.cleanDesktop = mi.checked; store.saveState(); }
+    },
+    {
       label: '开机自动启动', type: 'checkbox', checked: !!s.autostart,
       click: (mi) => { s.autostart = mi.checked; applyAutostart(); store.saveState(); }
     },

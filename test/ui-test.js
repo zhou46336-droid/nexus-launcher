@@ -114,9 +114,11 @@ async function openPanel(page, extra) {
   assert.strictEqual(await page.locator('.tile.editing').count(), 24);
   const firstName = await page.locator('.grid .tile .name').first().innerText();
   await page.locator('.grid .tile .minus').first().click({ force: true });
-  await page.waitForTimeout(100);
+  // 移除有约 0.3 秒的缩小动画，等提示弹出（说明已经删完）再检查
+  await page.locator('.toast', { hasText: '已从启动台移除' }).waitFor();
   assert.notStrictEqual(await page.locator('.grid .tile .name').first().innerText(), firstName);
   assert.match(await page.locator('.toast').innerText(), /已从启动台移除/);
+  await page.waitForTimeout(450);   // 等其余图标滑到位再截图
   await shot('edit');
   await docShot('edit');
   await page.click('.tbtn');
@@ -125,11 +127,42 @@ async function openPanel(page, extra) {
 
   // 5. 外观设置
   await page.click('text=外观');
-  assert.strictEqual(await page.locator('.set-row').count(), 7);
-  await page.locator('.switch').click();
-  assert.strictEqual(await page.locator('.switch').getAttribute('aria-checked'), 'false');
+  assert.strictEqual(await page.locator('.set-row').count(), 8);
+  // 配色：拼色圆，点了就换整套颜色
+  const cssVar = (n) => page.evaluate((v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim(), n);
+  assert.strictEqual(await page.locator('.swatch').count(), 2);
+  assert.strictEqual(await page.locator('.swatch.on').getAttribute('aria-label'), '谷歌蓝');
+  assert.strictEqual((await cssVar('--accent')).toUpperCase(), '#A8C7FA');
+  await page.click('.swatch[aria-label="谷歌绿"]');
+  await page.waitForTimeout(100);
+  assert.strictEqual(await page.locator('.swatch.on').getAttribute('aria-label'), '谷歌绿');
+  assert.deepStrictEqual(await Promise.all(['--accent', '--accent-2', '--accent-3', '--on-accent'].map(async (v) => (await cssVar(v)).toUpperCase())),
+    ['#6DD58C', '#B4CDB9', '#81D3DD', '#073A1A'], 'the whole scheme is applied');
+  assert.match(await page.locator('.set-row', { hasText: '配色' }).locator('.set-val').innerText(), /谷歌绿/);
+  await page.click('.swatch[aria-label="谷歌蓝"]');
+  await page.waitForTimeout(100);
+  const glassSw = page.locator('.switch[aria-label="液态玻璃"]');
+  await glassSw.click();
+  assert.strictEqual(await glassSw.getAttribute('aria-checked'), 'false');
   assert.doesNotMatch(await page.locator('#panel-bg').evaluate((el) => el.style.filter), /url\("?#lg"?\)/, 'glass can be turned off');
-  await page.locator('.switch').click();
+  await glassSw.click();
+  // 文字光晕：面板上的字有渐淡的黑色光晕；按钮、开关这类自带底色的字没有；可以关掉
+  const halo = () => page.evaluate(() => ({
+    panel: document.getElementById('panel').classList.contains('text-halo'),
+    label: getComputedStyle(document.querySelector('.set-row .set-label, .set-row div')).textShadow,
+    button: getComputedStyle(document.querySelector('#panel .btn')).textShadow
+  }));
+  let hs = await halo();
+  assert.ok(hs.panel, 'text halo on by default');
+  assert.match(hs.label, /rgba\(0, 0, 0, 0\.75\) 0px 0px 1px.*0px 0px 12px/, 'labels get a fading halo: ' + hs.label);
+  assert.strictEqual(hs.button, 'none', 'text on buttons is left alone');
+  const haloSw = page.locator('.switch[aria-label="文字光晕"]');
+  await haloSw.click();
+  await page.waitForTimeout(50);
+  hs = await halo();
+  assert.ok(!hs.panel, 'text halo can be turned off');
+  assert.match(await page.locator('.set-row', { hasText: '文字光晕' }).locator('.set-val').innerText(), /关闭/);
+  await haloSw.click();
   await shot('settings');
   await docShot('settings');
 
@@ -145,6 +178,13 @@ async function openPanel(page, extra) {
   assert.match(await page.locator('.set-row', { hasText: '背景渲染' }).locator('.set-val').innerText(), /60 帧/);
   const vbox = await page.locator('.live-bg').evaluate((v) => [v.style.left, v.style.top, v.style.width, v.style.height]);
   assert.deepStrictEqual(vbox.slice(2), ['1600px', '900px'], 'video covers the whole screen like the screenshot');
+  // 改刷新率：停掉旧捕获，按新帧数重新捕获
+  await page.click('.seg-btn >> text=120');
+  await page.waitForFunction(() => window.__gum.length >= 2 && window.__gum[window.__gum.length - 1].video.mandatory.maxFrameRate === 120, null, { timeout: 3000 });
+  await page.waitForSelector('#panel-bg video.live-bg.on', { timeout: 3000 });
+  assert.match(await page.locator('.set-row', { hasText: '背景渲染' }).locator('.set-val').innerText(), /120 帧/);
+  assert.strictEqual(await page.locator('#panel-bg video.live-bg').count(), 1, 'only one live video after changing fps');
+  assert.strictEqual(await page.evaluate(() => window.__liveStreams[0].getTracks()[0].readyState), 'ended', 'old capture stopped');
   await page.locator('.settings').evaluate((el) => { el.scrollTop = el.scrollHeight; });
   await shot('settings-live');
   await page.click('.seg-btn >> text=静态截图');

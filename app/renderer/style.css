@@ -1,9 +1,15 @@
 :root {
   color-scheme: dark;
-  --accent: #7CC7FF;
+  /* 配色（仿 Google Material 3 深色主题）：强调色由「外观 → 配色」决定，js/glass.js 会改写这四个；
+     底色和文字用 Google 的中性灰，不带蓝紫色偏 */
+  --accent: #A8C7FA;      /* 主色：按钮、开关、滑杆、焦点 */
+  --accent-2: #BAC7E0;    /* 次要色：选中的行、标签 */
+  --accent-3: #E8B8DD;    /* 第三色：新应用圆点、提示条 */
+  --on-accent: #062E6F;   /* 主色按钮上的文字 */
+  --surface: 19 19 20;    /* 面板底色 #131314（RGB 分量，配合透明度用） */
   --alpha: 0.6;
-  --text: #EEF1F6;
-  --muted: rgba(236, 239, 245, 0.78);
+  --text: #E3E3E3;
+  --muted: #C4C7C5;
   --line: rgba(255, 255, 255, 0.16);
   /* 圆角体系（仿 iOS）：卡片类用连续曲率的「超椭圆」圆角，按钮类用胶囊形；
      里层圆角 = 外层圆角 - 间距，保证同心 */
@@ -12,9 +18,10 @@
   --r-row: 20px;
   --r-item: 14px;
   --pill: 999px;
-  --btn-bg: rgba(255, 255, 255, 0.22);
-  --btn-bg-hover: rgba(255, 255, 255, 0.30);
-  --btn-text: #FFFFFF;
+  /* 普通按钮用 Material 3 的「色调按钮」：主色淡淡铺底，字是带一点主题色的白 */
+  --btn-bg: color-mix(in srgb, var(--accent) 30%, rgb(255 255 255 / 0.06));
+  --btn-bg-hover: color-mix(in srgb, var(--accent) 42%, rgb(255 255 255 / 0.08));
+  --btn-text: color-mix(in srgb, var(--accent) 30%, #FFFFFF);
   font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
 }
 
@@ -73,7 +80,7 @@ svg { display: block; flex-shrink: 0; }
 #panel-tint {
   position: absolute;
   inset: 0;
-  background: rgba(14, 18, 30, var(--alpha));
+  background: rgb(from color-mix(in srgb, var(--accent) 16%, rgb(var(--surface))) r g b / var(--alpha));
   pointer-events: none;
 }
 #content {
@@ -109,7 +116,7 @@ html.cleared body { opacity: 0; }
 #panel.waiting { opacity: 0; animation: none; }
 /* 背景截图还没到或失败时，底色加深，保证字看得清 */
 #panel:not(.waiting) #panel-tint { transition: background-color 0.2s ease; }
-#panel.no-bg #panel-tint { background: rgb(14 18 30 / max(var(--alpha), 0.82)); }
+#panel.no-bg #panel-tint { background: rgb(from color-mix(in srgb, var(--accent) 16%, rgb(var(--surface))) r g b / max(var(--alpha), 0.82)); }
 /* 液态玻璃：底色在边缘 46px（和玻璃厚边一样宽）里逐渐变淡，折射出来的背景更清楚；中间深浅不变，字照样清楚 */
 #panel.lg-on #panel-tint {
   -webkit-mask-image:
@@ -135,7 +142,7 @@ html.cleared body { opacity: 0; }
   justify-content: center;
   border-radius: inherit;
   corner-shape: inherit;
-  background: rgb(14 18 30 / 0.6);
+  background: rgb(var(--surface) / 0.6);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   color: #fff;
@@ -158,7 +165,7 @@ html.cleared body { opacity: 0; }
   gap: 2px;
   padding: 3px;
   border-radius: var(--pill);
-  background: rgba(0, 0, 0, 0.34);
+  background: color-mix(in srgb, var(--accent) 16%, rgb(0 0 0 / 0.34));
 }
 .seg-btn {
   height: 26px;
@@ -169,13 +176,13 @@ html.cleared body { opacity: 0; }
   border: 0;
   border-radius: var(--pill);
   background: transparent;
-  color: rgba(240, 243, 248, 0.86);
+  color: rgba(227, 227, 227, 0.86);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
 }
-.seg-btn:hover:not(.on) { background: rgba(255, 255, 255, 0.10); }
-.seg-btn.on { background: rgba(255, 255, 255, 0.30); color: #fff; font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
+.seg-btn:hover:not(.on) { background: color-mix(in srgb, var(--accent-2) 18%, transparent); }
+.seg-btn.on { background: var(--accent); color: var(--on-accent); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
 
 .btn {
   height: 32px;
@@ -196,7 +203,7 @@ html.cleared body { opacity: 0; }
 }
 .btn:hover { background: var(--btn-bg-hover); }
 .btn:active, .icon-btn:active { transform: scale(0.96); }
-.btn.primary { background: var(--accent); color: #0A0F1A; font-weight: 600; }
+.btn.primary { background: var(--accent); color: var(--on-accent); font-weight: 600; }
 .btn.primary:hover { filter: brightness(1.08); }
 .btn.primary:disabled { opacity: 0.45; filter: none; }
 .btn.wide { align-self: flex-start; }
@@ -220,7 +227,7 @@ html.cleared body { opacity: 0; }
 .icon-btn:disabled { opacity: 0.7; }
 .icon-btn.spinning svg { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.esc { display: flex; align-items: center; gap: 6px; margin-right: 6px; font-size: 12px; color: rgba(240, 243, 248, 0.88); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+.esc { display: flex; align-items: center; gap: 6px; margin-right: 6px; font-size: 12px; color: rgba(227, 227, 227, 0.88); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
 kbd {
   height: 20px;
   padding: 0 6px;
@@ -228,9 +235,9 @@ kbd {
   align-items: center;
   border-radius: 7px;
   corner-shape: squircle;
-  background: rgba(255, 255, 255, 0.18);
+  background: color-mix(in srgb, var(--accent) 30%, rgb(255 255 255 / 0.06));
   font: 600 11px "Segoe UI", sans-serif;
-  color: #fff;
+  color: color-mix(in srgb, var(--accent) 30%, #FFFFFF);
   text-shadow: none;
 }
 .chip {
@@ -240,8 +247,8 @@ kbd {
   align-items: center;
   padding: 0 12px;
   border-radius: var(--pill);
-  background: color-mix(in srgb, var(--accent) 26%, rgba(14, 18, 30, 0.55));
-  color: var(--accent);
+  background: color-mix(in srgb, var(--accent-2) 24%, rgb(30 31 32 / 0.6));
+  color: var(--accent-2);
   font-size: 13px;
   font-weight: 600;
 }
@@ -258,7 +265,7 @@ kbd {
   padding: 10px 4px;
   border-radius: var(--r-card);
   corner-shape: squircle;
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--accent) 24%, rgb(255 255 255 / 0.04));
 }
 .strip.dim { opacity: 0.4; pointer-events: none; }
 .strip-empty {
@@ -271,7 +278,7 @@ kbd {
 }
 
 .row-title { display: flex; align-items: baseline; justify-content: space-between; margin-top: 14px; flex-shrink: 0; }
-.row-title h2 { margin: 0; font-size: 13px; line-height: 18px; font-weight: 600; color: rgba(240, 242, 247, 0.92); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+.row-title h2 { margin: 0; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--accent); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
 .count { font-size: 12px; color: var(--muted); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
 
 /* ---------- 图标 ---------- */
@@ -308,7 +315,7 @@ kbd {
   cursor: pointer;
 }
 .strip .tile { padding: 0; gap: 6px; }
-.tile:hover { background: rgba(255, 255, 255, 0.08); }
+.tile:hover { background: color-mix(in srgb, var(--accent-2) 16%, transparent); }
 .strip .tile:hover { background: none; }
 .strip .tile:hover .tile-ic { transform: translateY(-1px); }
 
@@ -359,7 +366,7 @@ kbd {
   height: 6px;
   margin-right: 4px;
   border-radius: var(--pill);
-  background: var(--accent);
+  background: var(--accent-3);
   vertical-align: 1px;
 }
 
@@ -415,9 +422,9 @@ kbd {
 
 .dots { display: flex; justify-content: center; gap: 4px; height: 20px; flex-shrink: 0; }
 .dot { width: 20px; height: 20px; padding: 0; display: flex; align-items: center; justify-content: center; border: 0; background: none; cursor: pointer; }
-.dot span { width: 5px; height: 5px; border-radius: var(--pill); background: rgba(255, 255, 255, 0.45); transition: width 0.15s; }
+.dot span { width: 5px; height: 5px; border-radius: var(--pill); background: color-mix(in srgb, var(--accent-2) 55%, transparent); transition: width 0.15s; }
 .dot.on { width: 28px; }
-.dot.on span { width: 18px; background: #F4F6FA; }
+.dot.on span { width: 18px; background: var(--accent); }
 
 /* ---------- 右键菜单 ---------- */
 .menu {
@@ -431,7 +438,7 @@ kbd {
   padding: 6px;
   border-radius: var(--r-row);
   corner-shape: squircle;
-  background: rgba(24, 28, 40, 0.97);
+  background: rgba(30, 31, 32, 0.97);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
 }
 .mi {
@@ -451,10 +458,21 @@ kbd {
 .mi:hover:not(:disabled), .mi:focus-visible { background: rgba(255, 255, 255, 0.10); outline: none; }
 .mi:disabled { opacity: 0.4; }
 .mi .ml { flex-grow: 1; }
-.mi .mk { font-size: 11px; color: rgba(230, 234, 242, 0.6); }
-.mi.danger { color: #FF8F87; font-weight: 500; }
+.mi .mk { font-size: 11px; color: rgba(227, 227, 227, 0.6); }
+.mi.danger { color: #FFB4AB; font-weight: 500; }
 .mi.danger:hover { background: rgba(229, 72, 77, 0.18); }
 .sep { height: 1px; margin: 4px 8px; background: rgba(255, 255, 255, 0.12); }
+
+/* ---------- 文字光晕（外观 → 文字光晕）----------
+   字边缘一圈黑色，从 1px 到 12px 一层层变淡，没有硬边；面板很透明、壁纸很亮时字也看得清。
+   盖过上面各处原有的小阴影；关掉后恢复原样。按钮、输入框这类自带底色的字不加。 */
+#panel.text-halo, #panel.text-halo * {
+  text-shadow: 0 0 1px rgb(0 0 0 / 0.75), 0 0 3px rgb(0 0 0 / 0.6), 0 0 6px rgb(0 0 0 / 0.45), 0 0 12px rgb(0 0 0 / 0.25);
+}
+#panel.text-halo :is(.btn, .icon-btn, .seg-btn.on, input, textarea, select, kbd, .chip, .menu, .toast, .tile-ic, .swatch, .switch),
+#panel.text-halo :is(.btn, .icon-btn, .seg-btn.on, input, textarea, select, kbd, .chip, .menu, .toast, .tile-ic, .swatch, .switch) * {
+  text-shadow: none;
+}
 
 /* ---------- 提示条 ---------- */
 #toast-layer {
@@ -477,7 +495,7 @@ kbd {
   box-sizing: border-box;
   padding: 0 8px 0 10px;
   border-radius: var(--pill);
-  background: rgba(22, 26, 38, 0.94);
+  background: rgba(40, 42, 44, 0.94);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
   white-space: nowrap;
   font-size: 13px;
@@ -490,13 +508,13 @@ kbd {
   border-radius: var(--pill);
   background: rgba(255, 255, 255, 0.18);
   border: 0;
-  color: var(--accent);
+  color: var(--accent-3);
   font-weight: 600;
   cursor: pointer;
 }
-.tclose { width: 30px; height: 30px; padding: 0; display: flex; align-items: center; justify-content: center; border: 0; border-radius: var(--pill); background: none; color: rgba(240, 243, 248, 0.85); cursor: pointer; }
+.tclose { width: 30px; height: 30px; padding: 0; display: flex; align-items: center; justify-content: center; border: 0; border-radius: var(--pill); background: none; color: rgba(227, 227, 227, 0.85); cursor: pointer; }
 .tclose:hover { background: rgba(255, 255, 255, 0.12); }
-.tbar { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--accent); animation: shrink linear forwards; }
+.tbar { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--accent-3); animation: shrink linear forwards; }
 @keyframes shrink { from { width: 100%; } to { width: 0; } }
 
 /* ---------- 添加应用 ---------- */
@@ -514,7 +532,7 @@ kbd {
   flex-shrink: 0;
   border-radius: var(--pill);
   background: rgba(0, 0, 0, 0.32);
-  color: rgba(230, 234, 242, 0.7);
+  color: rgba(227, 227, 227, 0.7);
 }
 .search:focus-within { box-shadow: inset 0 0 0 1.5px var(--accent); }
 .search input, .field input {
@@ -530,7 +548,7 @@ kbd {
   font-size: 14px;
   user-select: text;
 }
-input::placeholder { color: rgba(230, 234, 242, 0.5); }
+input::placeholder { color: rgba(227, 227, 227, 0.5); }
 input[type="search"]::-webkit-search-cancel-button { filter: invert(1); opacity: 0.6; }
 
 .list {
@@ -557,13 +575,13 @@ input[type="search"]::-webkit-search-cancel-button { filter: invert(1); opacity:
   cursor: pointer;
 }
 .row:hover { background: rgba(255, 255, 255, 0.09); }
-.row.sel { background: color-mix(in srgb, var(--accent) 16%, rgba(255, 255, 255, 0.04)); }
+.row.sel { background: color-mix(in srgb, var(--accent-2) 20%, rgba(255, 255, 255, 0.04)); }
 .row.added { opacity: 0.6; cursor: default; }
 .row input { width: 18px; height: 18px; margin: 0; flex-shrink: 0; accent-color: var(--accent); }
 .row-text { display: flex; flex-direction: column; gap: 1px; flex-grow: 1; min-width: 0; }
 .row-name, .row-path { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-name { font-size: 14px; line-height: 20px; }
-.row-path { font-size: 12px; line-height: 16px; color: rgba(230, 234, 242, 0.7); }
+.row-path { font-size: 12px; line-height: 16px; color: rgba(227, 227, 227, 0.7); }
 .tag { height: 22px; padding: 0 8px; display: inline-flex; align-items: center; flex-shrink: 0; border-radius: var(--pill); background: rgba(255, 255, 255, 0.14); font-size: 12px; white-space: nowrap; }
 
 .foot {
@@ -663,9 +681,10 @@ input[type="search"]::-webkit-search-cancel-button { filter: invert(1); opacity:
 .seg-btn:disabled { opacity: 0.4; cursor: default; background: transparent !important; }
 .seg-btn:disabled::before { display: none; }
 .set-row input[type="range"] { width: 100%; margin: 0; accent-color: var(--accent); cursor: pointer; }
-.swatches { display: flex; gap: 10px; }
-.swatch { width: 26px; height: 26px; padding: 0; border: 0; border-radius: var(--pill); cursor: pointer; }
-.swatch.on { box-shadow: 0 0 0 2px rgba(14, 18, 30, 0.9), 0 0 0 4px #fff; }
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+/* 拼色圆：背景由 js/view-settings.js 按配色方案生成（上半主色、左下次要色、右下第三色） */
+.swatch { width: 30px; height: 30px; padding: 0; border: 0; border-radius: var(--pill); cursor: pointer; }
+.swatch.on { box-shadow: 0 0 0 2px rgb(var(--surface) / 0.9), 0 0 0 4px var(--text); }
 
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.22); border-radius: var(--pill); }
@@ -691,7 +710,7 @@ input[type="search"]::-webkit-search-cancel-button { filter: invert(1); opacity:
 .tbtn:hover::before, .tclose:hover::before, .tile:hover::before, .row:hover::before { opacity: 1; }
 .btn:active::before, .icon-btn:active::before { --glow: rgba(255, 255, 255, 0.4); }
 .btn.primary { --glow: rgba(255, 255, 255, 0.45); }
-.tile, .row, .mi { --glow: rgba(255, 255, 255, 0.2); --glow-r: 70px; }
+.tile, .row, .mi { --glow: color-mix(in srgb, var(--accent) 30%, transparent); --glow-r: 70px; }
 .strip .tile { --glow-r: 48px; }
 .mi.danger { --glow: rgba(255, 120, 120, 0.22); }
 .icon-btn { --glow-r: 28px; }
